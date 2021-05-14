@@ -1,7 +1,7 @@
 # Stochastic-Variance-Reduced-Newton-Methods
 ---
 
-We provide here the implementations of two stochastic Newton-type algorithms to solve the finite-sum minimization problem in Machine learning, *Stochastic Averaging  Newton Method(SAN)*. Currently our implementations support only (generalized)linear models. For loss function, logistic loss is provided for binary classification problems and pseudo-huber/L2 loss is supported for regression problems. To compare our algorithms with the SOTA, we also provides our codes for [SAG][sag], [SVRG][svrg] and [Stochastic Newton][snm].
+We provide here the implementations of two stochastic Newton-type algorithms to solve the finite-sum minimization problem in Machine learning, *Stochastic Averaging  Newton Method(SAN)*. Currently our implementations support only (generalized) linear models. For the loss function, logistic loss is provided for binary classification problems and pseudo-huber/L2 loss is supported for regression problems. To benchmark our algorithms, we also provide code for [SAG][sag], [SVRG][svrg] and [Stochastic Newton][snm].
 
 
 ## Package Requirements
