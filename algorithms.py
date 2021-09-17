@@ -1,9 +1,34 @@
+from pickle import FALSE
 import numpy as np
 import time
 import logging
 
+def update_records_and_print(cnt, loss,loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, #acc_records,
+                             total_running_time, epoch_running_time, verbose):
+    # Compute full gradient and loss
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    lx = np.mean(loss.val(label, data @ x)) + reg * regularizer.val(x)
+    # Update gradient norm, loss and time records
+    norm_records.append(np.sqrt(g @ g))
+    loss_records.append(lx/loss_x0)
+    # y_hat = np.sign(data @ x)
+    # acc_records.append(np.sum(y_hat == label)/n)
+    total_running_time += epoch_running_time
+    time_records.append(total_running_time)
+    # Print progress
+    if verbose == 1:
+        logging.info(
+            "| end of effective pass {:d} | time: {:f}s | norm of gradient {:f} | loss {:f} |".format(cnt,
+                                                                                            epoch_running_time,
+                                                                                            norm_records[-1],
+                                                                                            loss_records[-1])
+                                                                                            )
+    return                                                                            
+            
 
-def san(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, verbose=1):
+
+def san(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1, dist=None):
     """
     Stochastic Average Newton method for linear model, projection under a norm that depends on hessian of f_i
     :param loss: loss function object, methods: val, prime, dprime
@@ -19,110 +44,154 @@ def san(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, ver
     :param verbose: 0 or 1; 0 means silence, no events be logged;
     :return: trained model params, a list of gradients' norm
     """
-    # Denote n = n_samples, d = n_features, we introduce n auxiliary variables {alpha_i} \in R^d, plus model
-    # coefficients, we have totally (n+1) variables. We use a matrix W \in \R^{(n+1)xd} to store these variables.
-    # W[0, :] stores the model, and W[i:0] stores the i-th alpha, where i \in [|1, n|]
+    # Denote n = n_samples, d = n_features, we have model coefficients x \in R^d,
+    # and we introduce n auxiliary variables {alpha_i} \in R^d, thus we have totally (n+1) variables.
+    # We use a big matrix alphas \in \R^{nxd} to store auxiliary variables.
     n, d = data.shape
-    W = np.zeros((d, n + 1))  # initialization
-    W[:, 0] = x_0.copy()
-    # g = np.mean((-label / (1 + np.exp(label * (data @ W[:, 0])))).reshape(-1, 1) * data, axis=0) + reg * W[:, 0]
-    g = np.mean(loss.prime(label, data @ W[:, 0]).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(W[:, 0])
-
-    norm_records = [np.sqrt(g @ g)]
-    # loss = [np.mean(np.log(1 + np.exp(-label * (data @ W[:, 0]))))]  # records empirical loss during training
-    cnt = 0
-    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-    # iis = np.random.randint(0, n + 1, n * epoch)  # uniform sampling
+    alphas = np.zeros((n, d))  # auxiliary variables, it represents one alpha per row
+    x = x_0.copy()  # model
+    # initial loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # initial gradient
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    # intantiate records
+    norm_records, loss_records  = [np.sqrt(g @ g)], [1.0]
+    time_records = [0.0]
+    cnt = 0  # track the effective data passes
+    epoch_running_time, total_running_time = 0.0, 0.0
     iis = np.random.choice(n + 1, size=n * epoch, p=dist)  # sampling w.r.t customized distribution
+
     for iter_cnt, i in enumerate(iis):
         start_time = time.time()
-        if i == 0:
-            W[:, 1:] = W[:, 1:] - lr * np.mean(W[:, 1:], axis=1, keepdims=True)  # update all alphas
-        else:  # i \in [|1, n|]
-            dot_i = data[i - 1, :] @ W[:, 0]
+        if i == n:
+            alphas = alphas - np.mean(alphas, axis=0, keepdims=True)  # update all alphas
+        else:  # i \in [|0, n-1|]
+            dot_i = data[i, :] @ x
             # second-order derivation of (i-1)-th loss
-            dprime = loss.dprime(label[i - 1], dot_i)
-            diff = W[:, i] - loss.prime(label[i - 1], dot_i) * data[i - 1, :] - reg * regularizer.prime(W[:, 0])
-            inv = 1. / (1. + reg * regularizer.dprime(W[:, 0]))
-            scaled_data = inv * data[i - 1, :]
-            cte = dprime * (scaled_data @ diff) / (1 + dprime * (data[i - 1, :] @ scaled_data))
+            dprime = loss.dprime(label[i], dot_i)
+            diff = alphas[i, :] - loss.prime(label[i], dot_i) * data[i, :] - reg * regularizer.prime(x)
+            inv = 1. / (1. + reg * regularizer.dprime(x))
+            scaled_data = inv * data[i, :]
+            cte = dprime * (scaled_data @ diff) / (1 + dprime * (data[i, :] @ scaled_data))
             update = lr * (inv * diff - cte * scaled_data)
-            W[:, i] -= update  # update i-th alpha
-            W[:, 0] += update  # update x
+            alphas[i, :] -= update  # update i-th alpha
+            x += update  # update x
         epoch_running_time += time.time() - start_time
 
         # records the norm square of gradient after each data pass
         if (iter_cnt + 1) % n == 0:
             cnt += 1
-            g = np.mean(loss.prime(label, data @ W[:, 0]).reshape(-1, 1) * data, axis=0) + \
-                reg * regularizer.prime(W[:, 0])
-            norm_records.append(np.sqrt(g @ g))
-            total_running_time += epoch_running_time
-            time_records.append(total_running_time)
-            if verbose:
-                logging.info(
-                    "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                         norm_records[-1]))
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
-                return W[:, 0], norm_records, time_records
-    return W[:, 0], norm_records, time_records
+                return x, norm_records, loss_records, time_records
+    return x, norm_records, loss_records, time_records #loss_records, 
 
 
 def sana(loss, regularizer, data, label, reg, epoch, x_0, tol=None, verbose=1):
     # Denote n = n_samples, d = n_features, we introduce n auxiliary variables {alpha_i} \in R^d, plus model
-    # coefficients, we have totally (n+1) variables. We use a matrix W \in \R^{(n+1)xd} to store these variables.
-    # W[0, :] stores the model, and W[i:0] stores the i-th alpha, where i \in [|1, n|]
+    # coefficients x \in R^d, we have totally (n+1) variables.
+    # We use a big matrix alphas \in \R^{nxd} to store auxiliary variables.
     n, d = data.shape
-    W = np.zeros((d, n + 1))  # initialization
-    W[:, 0] = x_0.copy()
-    # g = np.mean((-label / (1 + np.exp(label * (data @ W[:, 0])))).reshape(-1, 1) * data, axis=0) + reg * W[:, 0]
-    g = np.mean(loss.prime(label, data @ W[:, 0]).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(W[:, 0])
-
-    norm_records = [np.sqrt(g @ g)]
-    # loss = [np.mean(np.log(1 + np.exp(-label * (data @ W[:, 0]))))]  # records empirical loss during training
+    alphas = np.zeros((n, d))  # initialization, it represents one alpha per row
+    x = x_0.copy()
+    # initial loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # initial gradient
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    # intantiate records
+    norm_records, loss_records  = [np.sqrt(g @ g)], [1.0]
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
     iis = np.random.randint(0, n, n * epoch)  # uniform sampling
     for iter_cnt, i in enumerate(iis):
         start_time = time.time()
 
-        dot_i = data[i, :] @ W[:, 0]
+        dot_i = data[i, :] @ x
         prime, dprime = loss.prime(label[i], dot_i), loss.dprime(label[i], dot_i)
-        reg_prime, reg_dprime = regularizer.prime(W[:, 0]), regularizer.dprime(W[:, 0])
-        diff = W[:, i + 1] - prime * data[i, :] - reg * reg_prime
+        reg_prime, reg_dprime = regularizer.prime(x), regularizer.dprime(x)
+        diff = alphas[i, :] - prime * data[i, :] - reg * reg_prime
         inv = 1. / (((n - 1) / n) + reg * reg_dprime)
         scaled_data = inv * data[i, :]
         cte = dprime * (scaled_data @ diff) / (1 + dprime * (data[i, :] @ scaled_data))
         update_w = inv * diff - cte * scaled_data
-        new_alpha_i = (dprime * (data[i, :] @ update_w) + prime) * data[i, :] + reg * (reg_dprime * update_w + reg_prime)
-        W[:, 1:] = W[:, 1:] - (1 / (n - 1)) * (new_alpha_i - W[:, i + 1]).reshape(-1, 1)
-        W[:, i + 1] = new_alpha_i
-        W[:, 0] += update_w  # update w
+        new_alpha_i = (dprime * (data[i, :] @ update_w) + prime) * data[i, :] + \
+                      reg * (reg_dprime * update_w + reg_prime)
+        alphas -= (1 / (n - 1)) * (new_alpha_i - alphas[i, :]).reshape(1, -1)
+        alphas[i, :] = new_alpha_i
+        x += update_w  # update w
 
         epoch_running_time += time.time() - start_time
 
         # records the norm square of gradient after each data pass
         if (iter_cnt + 1) % n == 0:
             cnt += 1
-            g = np.mean(loss.prime(label, data @ W[:, 0]).reshape(-1, 1) * data, axis=0) + \
-                reg * regularizer.prime(W[:, 0])
-            norm_records.append(np.sqrt(g @ g))
-            total_running_time += epoch_running_time
-            time_records.append(total_running_time)
-            if verbose:
-                logging.info(
-                    "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                         norm_records[-1]))
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
-                return W[:, 0], norm_records, time_records
-    return W[:, 0], norm_records, time_records
+                return x, norm_records, loss_records, time_records
+    return x, norm_records, loss_records, time_records
 
 
-def svrg2(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, verbose=1):
+def svrg2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1, dist=None):
+    # New version SVRG2
+    n, d = data.shape
+    alphas = np.zeros((n, d))  # auxiliary variables， it represents one alpha per row
+    avg_alphas = np.mean(alphas, axis=0)
+    x = x_0.copy()  # model
+    # initial loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # initial gradient
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    # intantiate records
+    norm_records, loss_records  = [np.sqrt(g @ g)], [1.0]
+    time_records = [0.0]
+
+    cnt = 0  # track the effective data passes
+    epoch_running_time, total_running_time = 0.0, 0.0
+    iis = np.random.choice(n + 1, size=n * epoch, p=dist)  # sampling w.r.t customized distribution
+
+    for iter_cnt, i in enumerate(iis):
+        start_time = time.time()
+        if i == n:
+            alphas = loss.prime(label, data @ x).reshape(-1, 1) * data + reg * regularizer.prime(x)  # update all alphas
+            avg_alphas = np.mean(alphas, axis=0)
+        else:  # i \in [|0, n-1|]
+            dot_i = data[i, :] @ x
+            prime, dprime = loss.prime(label[i], dot_i), loss.dprime(label[i], dot_i)
+            reg_prime, reg_dprime = regularizer.prime(x), regularizer.dprime(x)
+            diff = alphas[i] - prime * data[i, :] - reg * reg_prime - avg_alphas
+            inv = 1. / (((n - 1) / n) + reg * reg_dprime)
+            scaled_data = inv * data[i, :]
+            cte = dprime * (scaled_data @ diff) / (1 + dprime * (data[i, :] @ scaled_data))
+            update_w = lr * (inv * diff - cte * scaled_data)
+            new_alpha_i = alphas[i] + ((n - 1) / n) * update_w
+            alphas -= (1. / n) * update_w.reshape(1, -1)
+            alphas[i] = new_alpha_i
+            x += update_w
+
+        epoch_running_time += time.time() - start_time
+
+        # records the norm square of gradient after each data pass
+        if (iter_cnt + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+    return x, norm_records, loss_records, time_records
+
+
+def svrg2_old(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, verbose=1):
     # Denote n = n_samples, d = n_features, we introduce n auxiliary variables {alpha_i} \in R^d, plus model
     # coefficients, we have totally (n+1) variables. We use a matrix W \in \R^{(n+1)xd} to store these variables.
     # W[0, :] stores the model, and W[i:0] stores the i-th alpha, where i \in [|1, n|]
@@ -132,8 +201,12 @@ def svrg2(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, v
     W[:, 1:] = loss.prime(label, data @ W[:, 0]).reshape(1, -1) * data.T + \
                reg * regularizer.prime(W[:, 0]).reshape(-1, 1)
     avg_alpha = np.mean(W[:, 1:], axis=1)
-    g = np.mean(loss.prime(label, data @ W[:, 0]).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(W[:, 0])
-    norm_records = [np.sqrt(g @ g)]
+    # initial loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # initial gradient
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    # intantiate records
+    norm_records, loss_records  = [np.sqrt(g @ g)], [1.0]
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
     # iis = np.random.randint(0, n + 1, n * epoch)  # uniform sampling
@@ -160,15 +233,9 @@ def svrg2(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, v
         # records the norm square of gradient after each data pass
         if (iter_cnt + 1) % n == 0:
             cnt += 1
-            g = np.mean(loss.prime(label, data @ W[:, 0]).reshape(-1, 1) * data, axis=0) + \
-                reg * regularizer.prime(W[:, 0])
-            norm_records.append(np.sqrt(g @ g))
-            total_running_time += epoch_running_time
-            time_records.append(total_running_time)
-            if verbose:
-                logging.info(
-                    "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                         norm_records[-1]))
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             W[:, 0], norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
@@ -176,23 +243,239 @@ def svrg2(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, v
     return W[:, 0], norm_records, time_records
 
 
-def sag(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1):
+def sgd(loss, regularizer, data, label, lrs, reg, epoch, x_0, tol=None, beta = 0.0, verbose=1):
     """
-    Stochastic average gradient algorithm.
-    This function is adapted from the code provided by Rui
+    Stochastic Gradient Descent with an array of learning rates.
     """
     n, d = data.shape
     x = x_0.copy()
+    x_old = x.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     norm_records = [np.sqrt(g @ g)]
-    # Old gradients
-    gradient_memory = np.zeros((n, d))
-    y = np.zeros(d)
+    loss_records = [1.0]
 
     iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+
+        start_time = time.time()
+        # gradient of (i-1)-th data point
+        grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+        # update
+        direction = -lrs[i]* grad_i +beta*(x-x_old)
+        x_old = x.copy()
+        x+=direction
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lrs[i], reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+
+
+def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
+         beta1 =0.9, beta2 =0.999, eps = 10**(-8.0), verbose = False):
+    """Adam method"""
+    n, d = data.shape
+    x = x_0.copy()
+    m = np.zeros(d)
+    v = np.zeros(d)
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+
+        start_time = time.time()
+        # gradient of (i-1)-th data point
+        g = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+        m = beta1*m +(1-beta1)*g
+        v = beta2*v +(1-beta2)*(g*g)
+        mhat= m/(1-beta1**(idx+1))
+        vhat= v/(1-beta2**(idx+1))
+        direction = lr*mhat/(np.sqrt(vhat) +eps)
+        # update
+        x -= direction
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+
+
+def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, sps_max=100, beta=0.0):
+    """
+    Stochastic Polyak Stepsize. Note: We are using an epsilon 
+    added to the denominator together with max-capped step for stability.
+    """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+
+        start_time = time.time()
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], data[i, :] @ x)  + reg * regularizer.val(x)   
+        # gradient of (i-1)-th data point
+        grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+        # update
+        sps_step = ((lr*loss_i)/(grad_i @ grad_i +eps))
+        stepsize = np.minimum(sps_step,  sps_max)
+
+        z += -stepsize * grad_i 
+        x = beta*x +(1-beta)*z
+        # direction = -stepsize * grad_i + beta*(x-z)
+        # z = x.copy()
+        # x += direction
+
+
+        # direction = -step*(loss_i(i, x, *args)*g)/(norm(g)**2 +eps)+ momentum*(x-x_old)
+
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+
+def taps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, tau=0.0, tau_lr=0.01, beta=0.0, verbose=0.0):
+    """
+    (Moving) targetted stochastic polyak method. When tau_lr=0.0 coresponds to the TAPS method.
+    The lmbda controls the rate at which the target is updated. Setting lmbda =0.5 is the default.
+    """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # acc_records =[0.0]
+    # Targets for the loss values
+    alpha = np.zeros(n)
+    alpha_old = np.zeros(n)
+    alpha_mean = 0.0
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+
+        start_time = time.time()
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], data[i, :] @ x)  + reg * regularizer.val(x)   
+        # gradient of (i-1)-th data point
+        grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+        # update direction coefficient
+        coef_direction = (loss_i-alpha[i])/(grad_i @ grad_i +1)
+        updatei = lr*coef_direction #+ beta*(alpha[i] - alpha_old[i])
+        alpha_old[i] =alpha[i]
+        # alpha_oldi =alpha[i]
+        alpha[i] += updatei
+        z += -lr*coef_direction* grad_i
+        x = beta*x +(1-beta)*z
+        # direction = -lr*coef_direction* grad_i   + beta*(x-z)
+        # z = x.copy()
+        # x += direction
+        alpha_mean = alpha_mean +(1/n)*(alpha[i]-alpha_old[i])
+
+        if (idx + 1) % n == 0:
+            # Update the total target tau. tau_lr =0 coresponds to TAPS
+            tau = (1-tau_lr)*tau + tau_lr*(n/(1+n))*alpha_mean
+            # Update targets for loss values
+            alpha = alpha +lr*(tau-alpha_mean)
+            alpha_mean = alpha_mean+lr*(tau-alpha_mean)
+            alpha_old = alpha.copy()
+            # Monitoring
+            epoch_running_time += time.time() - start_time
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+    return
+
+def sag(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1):
+    """
+    Stochastic average gradient algorithm.
+    This function is adapted from the code provided by ***
+    """
+    n, d = data.shape
+    x = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x_0), axis=0) + reg * regularizer.val(x_0)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Old gradients
+    gradient_memory = np.zeros((n, d))
+    y = np.zeros(d)
+    for i in range(n): # initialize gradient table
+        gradient_memory[i] = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+    y = np.sum(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    # updating records because completed one pass over the data.
+    update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                    x, norm_records, loss_records, time_records, 
+                    total_running_time, epoch_running_time, verbose) 
+    cnt += 1
+
+
     for idx in range(len(iis)):
         i = iis[idx]
 
@@ -208,72 +491,83 @@ def sag(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
 
         if (idx + 1) % n == 0:
             cnt += 1
-            g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-            norm_records.append(np.sqrt(g @ g))
-            total_running_time += epoch_running_time
-            time_records.append(total_running_time)
-            if verbose == 1:
-                logging.info(
-                    "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                         norm_records[-1]))
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)   
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, time_records
+                return x, norm_records, loss_records, time_records
 
-    return x, norm_records, time_records
+    return x, norm_records, loss_records, time_records
 
 
 def svrg(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1):
     """
     Stochastic variance reduction gradient algorithm.
-    This function is adapted from the code provided by Rui
+
+    reference: Accelerating Stochastic Gradient Descent using Predictive Variance Reduction, Johnson & Zhang
+
+    Note: for all stochastic methods, we measure the performance as a function of the number of effective passes
+    through the data, measured as the number of queries to access single gradient (or Hessian) divided by
+    the size of dataset. To have a fair comparison with others methods, for SVRG, we pay a careful attention
+    to the step where we do a full pass of dataset at the reference point,
+    it means that the effective passes should be added one after this step.
     """
+    max_effective_pass = epoch // 2
     n, d = data.shape
     x = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x_0), axis=0) + reg * regularizer.val(x_0)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
-    x_old = x.copy()
-
-    iis = np.random.randint(0, n, n * epoch + 1)
-    cnt = 0
-    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-    for idx in range(len(iis)):
-
-        # Update
-        i = iis[idx]
+    norm_records, time_records, total_running_time = [np.sqrt(g @ g)], [0.0], 0.0
+    loss_records = [1.0]
+    effective_pass = 0
+    for idx in range(max_effective_pass):
 
         start_time = time.time()
-        if idx % n == 0:
-            x_old = x.copy()
-            tot_grad = np.mean(loss.prime(label, data @ x_old).reshape(-1, 1) * data, axis=0) + \
-                       reg * regularizer.prime(x_old)
-            grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
-            grad_i_old = loss.prime(label[i], data[i, :] @ x_old) * data[i, :] + reg * regularizer.prime(x_old)
-            g_i = grad_i - grad_i_old + tot_grad
-            x -= lr * g_i
-        elif idx % n != 0:
-            grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
-            grad_i_old = loss.prime(label[i], data[i, :] @ x_old) * data[i, :] + reg * regularizer.prime(x_old)
-            g_i = grad_i - grad_i_old + tot_grad
-            x -= lr * g_i
-        epoch_running_time += time.time() - start_time
+        x_ref = x.copy()
+        tot_grad = np.mean(loss.prime(label, data @ x_ref).reshape(-1, 1) * data, axis=0) + \
+                   reg * regularizer.prime(x_ref)
+        x -= lr * tot_grad
+        epoch_running_time = time.time() - start_time
 
-        if (idx + 1) % n == 0:
-            cnt += 1
-            g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-            norm_records.append(np.sqrt(g @ g))
-            total_running_time += epoch_running_time
-            time_records.append(total_running_time)
-            if verbose == 1:
-                logging.info(
-                    "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                         norm_records[-1]))
-            epoch_running_time = 0.0
-            if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, time_records
+        update_records_and_print(effective_pass, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+        if tol is not None and norm_records[-1] <= tol:
+            return x, norm_records, loss_records, time_records
 
-    return x, norm_records, time_records
+        iis = np.random.randint(low=0, high=n, size=n)
+        epoch_running_time = 0.0
+
+        for idx in range(len(iis)):  # inner loop
+            i = iis[idx]
+            start_time = time.time()
+            grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+            grad_i_ref = loss.prime(label[i], data[i, :] @ x_ref) * data[i, :] + reg * regularizer.prime(x_ref)
+            d_i = grad_i - grad_i_ref + tot_grad
+            x -= lr * d_i
+            epoch_running_time += time.time() - start_time
+
+        effective_pass += 1    
+        update_records_and_print(effective_pass, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+        # effective_pass += 1
+        # g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+        # norm_records.append(np.sqrt(g @ g))
+        # total_running_time += epoch_running_time
+        # time_records.append(total_running_time)
+        # if verbose == 1:
+        #     logging.info(
+        #         "| end of effective pass {:d} | time: {:f}s | norm of gradient {:f} |".format(effective_pass,
+        #                                                                                       epoch_running_time,
+        #                                                                                       norm_records[-1]))
+        if tol is not None and norm_records[-1] <= tol:
+            return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
 
 
 def snm(loss, data, label, reg, epoch, x_0, tol=None, verbose=1):
@@ -287,10 +581,12 @@ def snm(loss, data, label, reg, epoch, x_0, tol=None, verbose=1):
     """
     n, d = data.shape
     x = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * (0.5)*(x@x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * x
     norm_records = [np.sqrt(g @ g)]
-
+    loss_records = [1.0]
     memory_gamma = data @ x
     memory_alpha, memory_beta = loss.prime(label, memory_gamma), loss.dprime(label, memory_gamma)
 
@@ -325,19 +621,14 @@ def snm(loss, data, label, reg, epoch, x_0, tol=None, verbose=1):
 
         if (idx + 1) % n == 0:
             cnt += 1
-            g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * x
-            norm_records.append(np.sqrt(g @ g))
-            total_running_time += epoch_running_time
-            time_records.append(total_running_time)
-            if verbose == 1:
-                logging.info(
-                    "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                         norm_records[-1]))
+            update_records_and_print(cnt, loss, loss_x0, lambda x: 0.5*x@x, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, time_records
+                return x, norm_records, loss_records, time_records
 
-    return x, norm_records, time_records
+    return x, norm_records, loss_records, time_records
 
 
 def vsn(func, data, label, reg, epoch, x_0, tol=None, verbose=1):
@@ -356,13 +647,15 @@ def gd(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1)
     """
     n, d = data.shape
     x = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x_0), axis=0) + reg * regularizer.val(x_0)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     norm_records = [np.sqrt(g @ g)]
-
+    loss_records = [1.0]
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-    for cnt in range(1, epoch+1):
+    for cnt in range(1, epoch + 1):
 
         start_time = time.time()
 
@@ -372,18 +665,13 @@ def gd(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1)
         epoch_running_time = time.time() - start_time
 
         # evaluate
-        g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-        norm_records.append(np.sqrt(g @ g))
-        total_running_time += epoch_running_time
-        time_records.append(total_running_time)
-        if verbose == 1:
-            logging.info(
-                "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                     norm_records[-1]))
+        update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
         if tol is not None and norm_records[-1] <= tol:
-            return x, norm_records, time_records
+            return x, norm_records, loss_records, time_records
 
-    return x, norm_records, time_records
+    return x, norm_records, loss_records, time_records
 
 
 def newton(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1):
@@ -392,12 +680,15 @@ def newton(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbos
     """
     n, d = data.shape
     x = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
 
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-    for cnt in range(1, epoch+1):
+    for cnt in range(1, epoch + 1):
 
         start_time = time.time()
 
@@ -410,15 +701,10 @@ def newton(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbos
         epoch_running_time = time.time() - start_time
 
         # evaluate
-        g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-        norm_records.append(np.sqrt(g @ g))
-        total_running_time += epoch_running_time
-        time_records.append(total_running_time)
-        if verbose == 1:
-            logging.info(
-                "| end of epoch {:d} | time: {:f}s | norm of gradient {:f} |".format(cnt, epoch_running_time,
-                                                                                     norm_records[-1]))
+        update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
         if tol is not None and norm_records[-1] <= tol:
-            return x, norm_records, time_records
+            return x, norm_records, loss_records, time_records
 
-    return x, norm_records, time_records
+    return x, norm_records, loss_records, time_records

@@ -1,7 +1,6 @@
-# Stochastic-Variance-Reduced-Newton-Methods
----
+# StochOpt-py: Stochastic Optimization in Python
 
-We provide here the implementations of two stochastic Newton-type algorithms to solve the finite-sum minimization problem in Machine learning, *Stochastic Averaging  Newton Method(SAN)*. Currently our implementations support only (generalized) linear models. For the loss function, logistic loss is provided for binary classification problems and pseudo-huber/L2 loss is supported for regression problems. To benchmark our algorithms, we also provide code for [SAG][sag], [SVRG][svrg] and [Stochastic Newton][snm].
+This is a package for benchmarking stochastic optimization methods in Python. For the loss function, logistic loss is provided for binary classification problems and pseudo-huber/L2 loss is supported for regression problems. To benchmark our algorithms, we also provide code for [SAG][sag], [SVRG][svrg], [ADAM][adam],  and [SGD] .
 
 
 ## Package Requirements
@@ -17,13 +16,13 @@ We provide here the implementations of two stochastic Newton-type algorithms to 
 
 1. Preparing dataset.
 
-	The datasets we used in our experiments are downloaded from [LibSVM](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html). 
+	The datasets we used in our experiments are downloaded from [LibSVM](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html). Place the data sets into the ./datasets folder
 
 2. Editing the `run.sh` file.
 
 	You need to edit some arguments to run the codes according to your experimental setting. For example,
 	```
-	python main.py --type 0 --dataset 'phishing' --data_path './datasets/phishing.txt' \
+	python main.py --type 0 --dataset 'phishing' --data_path './datasets/phishing' \
 		       --result_folder 'results' --log_file 'log.txt' \
 		       --epochs 50 --n_repetition 10 --ill_conditional 2 --lr 1.0 \
 		       --loss "L2" --regularizer 'L2'  \
@@ -50,7 +49,15 @@ We provide here the implementations of two stochastic Newton-type algorithms to 
 3. Running  `./run.sh` in your terminal.
 
 
+## Reproducing Experiments in `Stochastic Polyak Stepsize with a Moving Target'
+
+1. Download the data sets colon-cancer, duke, mushrooms and phishing from  [LibSVM](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html).  Place the data sets into the ./datasets folder 
+2. Run './run_datasets.sh' in your terminal
+
+3. To reproduce the heatmaps, see the code `grid_search_motaps.py' and choose a data set by specifying data_name and data_path. Run in terminal `python grid_search_motaps.py'.
 
 [sag]: https://arxiv.org/abs/1309.2388
 [svrg]: https://papers.nips.cc/paper/2013/file/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Paper.pdf
 [snm]: https://arxiv.org/abs/1912.01597
+[adam]: https://arxiv.org/abs/1412.6980
+[motaps]: Stochastic Polyak Stepsize with a Moving Target

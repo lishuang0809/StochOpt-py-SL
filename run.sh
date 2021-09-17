@@ -12,9 +12,13 @@
 # --reg: float, regularization parameter, default-None
 # --lr: float, learning rate for Stochastic Averaging Newton, default: 1.0
 # --run_xx: do we run xx algorithm
+# --run_newton False --run_gd False
+python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-cancer' \
+               --name 'colon' --result_folder 'logistic' --log_file 'log1.txt' \
+               --epochs 75 --n_repetition 10 --reg_power_order 1.0 --tol 1e-8  \
+               --loss "Logistic" --regularizer 'L2'  \
+               --run_sag True --run_svrg True --run_sps True --run_sgd True \
+               --run_taps True --run_motaps True 
 
-python main.py --type 1 --dataset 'space-ga' --data_path './datasets/space_ga.txt' \
-               --result_folder 'ridge' --log_file 'log.txt' \
-               --epochs 50 --n_repetition 10 --ill_conditional 2 \
-               --loss "L2" --regularizer 'L2'  \
-               --run_san True --run_sag True --run_svrg True --run_svrg2 False --run_newton False --run_gd False
+
+ 
