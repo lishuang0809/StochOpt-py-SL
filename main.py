@@ -296,7 +296,7 @@ if __name__ == '__main__':
     if opt.run_sps:
         np.random.seed(0)
         L_max = utils.compute_L_max(X, reg, opt.loss,opt.regularizer)
-        sps_max = 400000.0/L_max # Nico suggested 10 or 100 or larger. Neurips 2021 submission used 4.0/L_max
+        sps_max = 100.0/L_max # Nico suggested 10 or 100 or larger. Neurips 2021 submission used 4.0/L_max
         sps_lr = 1.0
         eps = 0.01
         if opt.beta == 0.0:

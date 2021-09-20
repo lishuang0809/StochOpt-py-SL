@@ -418,19 +418,13 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
         #      0.5*(loss_i^2)/(|grad_i|^4)*(<hess_grad_i, grad_i> )/
         #     ( |grad_i  - hess_grad_i *loss_i/ |grad_i|^2  |^2) *
         #     (grad_i  - hess_grad_i *(loss_i/ |grad_i|^2))
-        l_div_gnorm = loss_i/ (g@g +eps)
+        l_div_gnorm = loss_i/ (grad_i@grad_i +eps)
         dir_2nd =  grad_i -hess_grad_i *l_div_gnorm
         dir_2nd_norm = dir_2nd@dir_2nd
-
-        # Heavy ball form of momentum
-        # z += -l_div_gnorm*grad_i 
-        # x += -0.5*(l_div_gnorm**2) *(hess_grad_i@grad_i/(dir_2nd_norm+eps))*dir_2nd
-        # x+= beta*(x-z) # Heavy ball form of  momentum 
-        # z = x.copy()
-
+        
         ## Iterative averaging form of momentum
         z += -lr*l_div_gnorm*grad_i  #The update is applied to z variable because we use the iterative
-        # z += -0.5*lr*(l_div_gnorm**2) *(hess_grad_i@grad_i/(dir_2nd_norm+eps))*dir_2nd
+        z += -0.5*lr*(l_div_gnorm**2) *(hess_grad_i@grad_i/(dir_2nd_norm+eps))*dir_2nd
         x = beta*x +(1.0-beta)*z  # This adds on momentum 
 
         epoch_running_time += time.time() - start_time
