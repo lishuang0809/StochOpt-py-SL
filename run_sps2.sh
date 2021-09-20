@@ -26,17 +26,23 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
-betas=(0.0 0.3 0.5)
-DATASET="colon-cancer" #mushrooms duke colon-cancer
+betas=(0.0 0.3 0.5 0.7 0.8)
+DATASET=("colon-cancer" "mushrooms" "duke") #mushrooms duke colon-cancer
 NUM_betas=${#betas[@]}
-for (( r=0; r<$NUM_betas; r++ ))
+NUM_DATASETS=${#DATASET[@]}
+
+for (( j=0; j<$NUM_DATASETS; j++ ))
 do
-    NAME="$DATASET-${betas[r]}"
-    python main.py --type 1 --dataset $DATASET --data_path "./datasets/$DATASET" \
-                --name "$DATASET-${betas[r]}" --result_folder 'sps2' --log_file "log-${NAME}.txt" \
-                --epochs 50 --n_repetition 1 --reg 0.0 --tol 1e-8  \
-                --loss "Logistic" --regularizer 'L2'  \
-                --run_sps True --run_sgd True --run_adam True --run_sps2 True  --beta ${betas[r]}
+    for (( r=0; r<$NUM_betas; r++ ))
+    do
+        NAME="${DATASET[j]}-${betas[r]}"
+        python main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
+                    --name $NAME --result_folder 'sps2' --log_file "log-${NAME}.txt" \
+                    --epochs 50 --n_repetition 1 --reg 0.0 --tol 1e-8  \
+                    --loss "Logistic" --regularizer 'L2'  \
+                    --run_sps True --run_sgd True --run_adam True --run_sps2 True  --beta ${betas[r]}
+    done
+    echo "Finished ${DATASET[j]}"
 done
 
 
