@@ -18,7 +18,7 @@ python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-c
                --epochs 75 --n_repetition 10 --reg_power_order 1.0 --tol 1e-8  \
                --loss "Logistic" --regularizer 'L2'  \
                --run_sag True --run_svrg True --run_sps True --run_sgd True \
-               --run_taps True --run_motaps True
+#               --run_taps True --run_motaps True
 
 
  
