@@ -5,7 +5,7 @@ import math
 import time
 import numpy as np
 import load_data
-from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam
+from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2
 import utils
 import loss
 import regularizer
@@ -57,6 +57,8 @@ if __name__ == '__main__':
     parser.add_argument('--run_newton', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sps', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_sps2', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sgd', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
@@ -314,6 +316,25 @@ if __name__ == '__main__':
         utils.save(os.path.join(folder_path, 'sp_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sp_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp_grad_time'), grad_time)
+    if opt.run_sps2:
+        np.random.seed(0)
+        sps2_lr =1.0
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SP2"
+        else:
+            beta = opt.beta
+            algo_name = "SP2M" + str(beta)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
+                  "tol": opt.tol, "eps": eps,  "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=sps, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        utils.save(os.path.join(folder_path, 'sp2_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'sp2_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'sp2_grad_time'), grad_time)
 
     if opt.run_taps:
         np.random.seed(0)

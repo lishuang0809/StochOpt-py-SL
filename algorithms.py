@@ -362,12 +362,71 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
 
         z += -stepsize * grad_i 
         x = beta*x +(1-beta)*z
-        # direction = -stepsize * grad_i + beta*(x-z)
+        # direction = -stepsize * grad_i + beta*(x-z) # Heavy ball form of  momentum 
         # z = x.copy()
         # x += direction
 
 
         # direction = -step*(loss_i(i, x, *args)*g)/(norm(g)**2 +eps)+ momentum*(x-x_old)
+
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+
+def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, beta=0.0):
+    """
+    Second order Stochastic Polyak. Introduced an epsilon (eps) in the denominators to avoid overflow
+    """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+
+        start_time = time.time()
+        # ith data point
+        di = data[i, :] 
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x)  + reg * regularizer.val(x)   
+        # gradient of (i-1)-th dataloss.prime(label[i], data[i, :] @ x) point
+        lprime = loss.prime(label[i], di @ x)
+        grad_i = lprime * di + reg * regularizer.prime(x)
+        # Hessian-grad product of (i-1)-th data point  #TODO: DOULBE CHECK THIS !
+
+        hess_grad_i = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
+        hess_grad_i += reg * regularizer.dprime(x) *grad_i
+        # update in mathematics is  #TODO: DOULBE CHECK THIS !
+         # w =  w - (loss_i/|grad_i|^2)grad_i -
+        #      0.5*(loss_i^2)/(|grad_i|^4)*(<hess_grad_i, grad_i> )/
+        #     ( |grad_i  - hess_grad_i *loss_i/ |grad_i|^2  |^2) *
+        #     (grad_i  - hess_grad_i *(loss_i/ |grad_i|^2))
+        loss_div_gradnorm = loss_i/ (g@g +eps)
+        direction_2nd_order =  grad_i -hess_grad_i *loss_div_gradnorm
+        norm_direction_2nd_order = direction_2nd_order@direction_2nd_order
+        z += -loss_div_gradnorm*grad_i  #The update is applied to z variable because we use the iterative
+        z += -0.5*(loss_div_gradnorm**2) *(hess_grad_i@grad_i/(norm_direction_2nd_order+eps))*norm_direction_2nd_order
+        x = beta*x +(1-beta)*z  # This adds on momentum 
 
         epoch_running_time += time.time() - start_time
 

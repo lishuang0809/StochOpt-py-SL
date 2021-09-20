@@ -12,7 +12,7 @@ class L2:
 
     @staticmethod
     def dprime(x):
-        return np.ones_like(x)
+        return 1.0#np.ones_like(x)
 
 
 class PseudoHuber:
