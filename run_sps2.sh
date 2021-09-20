@@ -26,7 +26,7 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
-betas=(0.1)
+betas=(0.0)
 DATASET="colon-cancer" #mushrooms duke colon-cancer
 NUM_betas=${#betas[@]}
 for (( r=0; r<$NUM_betas; r++ ))

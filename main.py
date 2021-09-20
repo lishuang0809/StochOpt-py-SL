@@ -296,7 +296,7 @@ if __name__ == '__main__':
     if opt.run_sps:
         np.random.seed(0)
         L_max = utils.compute_L_max(X, reg, opt.loss,opt.regularizer)
-        sps_max = 4.0/L_max # Nico suggested 10 or 100 or larger. Neurips 2021 submission used 4.0/L_max
+        sps_max = 400000.0/L_max # Nico suggested 10 or 100 or larger. Neurips 2021 submission used 4.0/L_max
         sps_lr = 1.0
         eps = 0.01
         if opt.beta == 0.0:
@@ -318,8 +318,8 @@ if __name__ == '__main__':
                    os.path.join(folder_path, 'sp_grad_time'), grad_time)
     if opt.run_sps2:
         np.random.seed(0)
-        sps2_lr =0.5
-        eps=0.0001
+        sps2_lr =1.0
+        eps=0.01
         if opt.beta == 0.0:
             beta = 0.0
             algo_name = "SP2"
