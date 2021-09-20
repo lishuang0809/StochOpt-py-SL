@@ -365,10 +365,6 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
         # direction = -stepsize * grad_i + beta*(x-z) # Heavy ball form of  momentum 
         # z = x.copy()
         # x += direction
-
-
-        # direction = -step*(loss_i(i, x, *args)*g)/(norm(g)**2 +eps)+ momentum*(x-x_old)
-
         epoch_running_time += time.time() - start_time
 
         if (idx + 1) % n == 0:
@@ -414,7 +410,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
         lprime = loss.prime(label[i], di @ x)
         grad_i = lprime * di + reg * regularizer.prime(x)
         # Hessian-grad product of (i-1)-th data point  #TODO: DOULBE CHECK THIS !
-
+  
         hess_grad_i = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
         hess_grad_i += reg * regularizer.dprime(x) *grad_i
         # update in mathematics is  #TODO: DOULBE CHECK THIS !
@@ -426,10 +422,12 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
         dir_2nd =  grad_i -hess_grad_i *l_div_gnorm
         dir_2nd_norm = dir_2nd@dir_2nd
 
-        dir = -l_div_gnorm*grad_i 
-        dir+= -0.5*(l_div_gnorm**2) *(hess_grad_i@grad_i/(dir_2nd_norm+eps))*dir_2nd
-        x+= dir + beta*(x-z) # Heavy ball form of  momentum 
+        x += -l_div_gnorm*grad_i 
+        x += -0.5*(l_div_gnorm**2) *(hess_grad_i@grad_i/(dir_2nd_norm+eps))*dir_2nd
+        x+= beta*(x-z) # Heavy ball form of  momentum 
         z = x.copy()
+
+        ## Iterative averaging form of momentum
         # z += -loss_div_gradnorm*grad_i  #The update is applied to z variable because we use the iterative
         # z += -0.5*(loss_div_gradnorm**2) *(hess_grad_i@grad_i/(norm_direction_2nd_order+eps))*direction_2nd_order
         # x = beta*x +(1-beta)*z  # This adds on momentum 

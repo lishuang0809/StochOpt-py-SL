@@ -4,7 +4,16 @@ import numpy as np
 class LogisticLoss:
     @staticmethod
     def val(y, y_hat):
-        return np.log(1 + np.exp(-y * y_hat))
+        # Numerically stable version, seperating the negative and positive to avoid overflow.
+        t = y * y_hat
+        idx = t > 0
+        out = np.zeros(idx.shape)
+        out[idx] = np.log(1 + np.exp(-t[idx]))
+        out[~idx] = -t[~idx] + np.log(1+ np.exp(t[~idx]))   #exp_t / (1.0 + exp_t)
+        return out 
+    # @staticmethod
+    # def val(y, y_hat): # Numerically unstable version
+    #     return np.log(1 + np.exp(-y * y_hat))
 
     @staticmethod
     def prime(y, y_hat):
@@ -13,7 +22,8 @@ class LogisticLoss:
     @staticmethod
     def dprime(y, y_hat):
         a = np.exp(y * y_hat)
-        return a / ((1 + a) ** 2)
+        return 1/(1+a) - 1/((1+a)**2) # Numerically stable version
+        # return a / ((1 + a) ** 2)  # Numerically unstable version
 
 
 class L2:
