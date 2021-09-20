@@ -318,7 +318,7 @@ if __name__ == '__main__':
                    os.path.join(folder_path, 'sp_grad_time'), grad_time)
     if opt.run_sps2:
         np.random.seed(0)
-        sps2_lr =1.0
+        sps2_lr =0.5
         eps=0.0001
         if opt.beta == 0.0:
             beta = 0.0
