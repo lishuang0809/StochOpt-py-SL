@@ -32,7 +32,7 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
-betas=(0.7 0.75 0.8 0.85)
+betas=(0.7 0.75 0.8 0.85 0.9)
 DATASET="mushrooms"
 NUM_betas=${#betas[@]}
 for (( r=0; r<$NUM_betas; r++ ))
