@@ -319,6 +319,7 @@ if __name__ == '__main__':
     if opt.run_sps2:
         np.random.seed(0)
         sps2_lr =1.0
+        eps=0.0001
         if opt.beta == 0.0:
             beta = 0.0
             algo_name = "SP2"
@@ -329,7 +330,7 @@ if __name__ == '__main__':
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
                   "tol": opt.tol, "eps": eps,  "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
-            algo_name=algo_name, algo=sps, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name=algo_name, algo=sps2, algo_kwargs=kwargs, n_repeat=n_rounds)
         dict_grad_iter[algo_name] = grad_iter
         dict_loss_iter[algo_name] = loss_iter
         utils.save(os.path.join(folder_path, 'sp2_grad_iter'), grad_iter,

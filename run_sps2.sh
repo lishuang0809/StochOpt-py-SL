@@ -13,10 +13,36 @@
 # --lr: float, learning rate for Stochastic Averaging Newton, default: 1.0
 # --run_xx: do we run xx algorithm
 # --run_newton False --run_gd False
-python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-cancer' \
-               --name 'colon' --result_folder 'sps2' --log_file 'log1.txt' \
-               --epochs 75 --n_repetition 10 --reg 0.0 --tol 1e-8  \
-               --loss "Logistic" --regularizer 'L2'  \
-               --run_sps True --run_sgd True --run_adam True --run_sps2 True
 
- 
+# python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-cancer' \
+#                --name 'colon' --result_folder 'sps2' --log_file 'log1.txt' \
+#                --epochs 75 --n_repetition 10 --reg 0.0 --tol 1e-8  \
+#                --loss "Logistic" --regularizer 'L2'  \
+#                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
+
+# python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-cancer' \
+#                --name 'colon-beta-04' --result_folder 'sps2' --log_file 'log1.txt' \
+#                --epochs 75 --n_repetition 10 --reg 0.0 --tol 1e-8  \
+#                --loss "Logistic" --regularizer 'L2'  \
+#                --run_sps True --run_sgd True --run_adam True --run_sps2 True --beta 0.4
+
+# python main.py --type 1 --dataset 'duke' --data_path './datasets/duke' \
+#                --name 'duke' --result_folder 'sps2' --log_file 'log1.txt' \
+#                --epochs 75 --n_repetition 10 --reg 0.0 --tol 1e-8  \
+#                --loss "Logistic" --regularizer 'L2'  \
+#                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
+
+betas=(0.7 0.75 0.8 0.85)
+DATASET="mushrooms"
+NUM_betas=${#betas[@]}
+for (( r=0; r<$NUM_betas; r++ ))
+do
+    NAME=("mush-beta-${betas[r]}")
+    python main.py --type 1 --dataset DATASET --data_path "./datasets/${DATASET}" \
+                --name "${DATASET}-${betas[r]}" --result_folder 'sps2' --log_file "log-${NAME}.txt" \
+                --epochs 75 --n_repetition 1 --reg 0.0 --tol 1e-8  \
+                --loss "Logistic" --regularizer 'L2'  \
+                --run_sps True --run_sgd True --run_adam True --run_sps2 True  --beta ${betas[r]}
+done
+
+
