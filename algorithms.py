@@ -413,7 +413,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
   
         hess_grad_i = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
         hess_grad_i += reg * regularizer.dprime(x) *grad_i
-        # update in mathematics is  #TODO: DOULBE CHECK THIS !
+        # update in mathematics is  #TODO: DOULBE CHECK THIS ! Shuang: The update below does match the formula in our paper
          # w =  w - (loss_i/|grad_i|^2)grad_i -
         #      0.5*(loss_i^2)/(|grad_i|^4)*(<hess_grad_i, grad_i> )/
         #     ( |grad_i  - hess_grad_i *loss_i/ |grad_i|^2  |^2) *
