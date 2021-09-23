@@ -402,28 +402,27 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
         i = iis[idx]
         # import pdb; pdb.set_trace()
         start_time = time.time()
+        # update in mathematics is  #TODO: DOULBE CHECK THIS !
+        # w =  w - (loss_i/|grad_i|^2)grad_i -
+        #      0.5*(loss_i^2)/(|grad_i|^4)*(<hess_grad_i, grad_i> )/
+        #     ( |grad_i  - hess_grad_i *loss_i/ |grad_i|^2  |^2) *
+        #     (grad_i  - hess_grad_i *(loss_i/ |grad_i|^2))
         # ith data point
         di = data[i, :] 
         # loss of (i-1)-th data point
         loss_i = loss.val(label[i], di @ x)  + reg * regularizer.val(x)   
         # gradient of (i-1)-th dataloss.prime(label[i], data[i, :] @ x) point
         lprime = loss.prime(label[i], di @ x)
-        grad_i = lprime * di + reg * regularizer.prime(x)
-        # Hessian-grad product of (i-1)-th data point  #TODO: DOULBE CHECK THIS !
-  
-        hess_grad_i = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
-        hess_grad_i += reg * regularizer.dprime(x) *grad_i
-        # update in mathematics is  #TODO: DOULBE CHECK THIS !
-         # w =  w - (loss_i/|grad_i|^2)grad_i -
-        #      0.5*(loss_i^2)/(|grad_i|^4)*(<hess_grad_i, grad_i> )/
-        #     ( |grad_i  - hess_grad_i *loss_i/ |grad_i|^2  |^2) *
-        #     (grad_i  - hess_grad_i *(loss_i/ |grad_i|^2))
-        l_div_gnorm = loss_i/ (grad_i@grad_i +eps)
-        dir_2nd =  grad_i -hess_grad_i *l_div_gnorm
+        gi = lprime * di + reg * regularizer.prime(x)
+        # Hessian-grad product of (i-1)-th data point  #TODO: DOUBLE CHECK THIS !
+        hess_gi = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
+        hess_gi += reg * regularizer.dprime(x)*gi
+        l_div_gnorm = loss_i/ (gi@gi +eps)
+        dir_2nd =  gi -hess_gi*l_div_gnorm
         dir_2nd_norm = dir_2nd@dir_2nd
         ## Iterative averaging form of momentum
-        z += -lr*l_div_gnorm*grad_i  #The update is applied to z variable because we use the iterative
-        z += -0.5*lr*(l_div_gnorm**2) *(hess_grad_i@grad_i/(dir_2nd_norm+eps))*dir_2nd
+        z += -lr*l_div_gnorm*gi  #The update is applied to z variable because we use the iterative
+        z += -0.5*lr*(l_div_gnorm**2) *(hess_gi@gi/(dir_2nd_norm+eps))*dir_2nd
         x = beta*x +(1.0-beta)*z  # This adds on momentum 
 
         epoch_running_time += time.time() - start_time

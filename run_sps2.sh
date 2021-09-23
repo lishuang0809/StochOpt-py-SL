@@ -26,7 +26,7 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
-betas=(0.0 0.3 0.5 0.7 0.8)
+betas=(0.0 0.4 0.6 0.8 0.85 0.90)
 DATASET=("colon-cancer" "mushrooms" "duke") #mushrooms duke colon-cancer
 NUM_betas=${#betas[@]}
 NUM_DATASETS=${#DATASET[@]}
@@ -43,6 +43,6 @@ do
                     --run_sps True --run_sgd True --run_adam True --run_sps2 True  --beta ${betas[r]}
     done
     echo "Finished ${DATASET[j]}"
-done
+done    
 
 
