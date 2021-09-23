@@ -409,7 +409,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
         # gradient of (i-1)-th dataloss.prime(label[i], data[i, :] @ x) point
         lprime = loss.prime(label[i], di @ x)
         grad_i = lprime * di + reg * regularizer.prime(x)
-        # Hessian-grad product of (i-1)-th data point  #TODO: DOULBE CHECK THIS !
+        # Hessian-grad product of (i-1)-th data point  #TODO: DOULBE CHECK THIS ! Shuang: Done!
   
         hess_grad_i = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
         hess_grad_i += reg * regularizer.dprime(x) *grad_i
