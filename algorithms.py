@@ -438,6 +438,74 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
 
     return x, norm_records, loss_records, time_records
 
+
+def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None, eps=0.001, verbose=1, beta=0.0):
+    """
+    Second order Stochastic Polyak with slack. Introduced an epsilon (eps) in the denominators to avoid overflow
+    """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+#    z_s = s_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+    
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+        # import pdb; pdb.set_trace()
+        start_time = time.time()        
+        # ith data point
+        di = data[i, :] 
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x)  + reg * regularizer.val(x)   
+        # gradient of (i-1)-th data point
+        lprime = loss.prime(label[i], di @ x)
+        gi = lprime * di + reg * regularizer.prime(x)
+        # Hessian-grad product of (i-1)-th data point  
+        hess_gi = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
+        hess_gi += reg * regularizer.dprime(x)*gi
+        
+        # ---------Added by Shuang, please double check this -------
+        temp1 = np.maximum(0,loss_i - (1-lamb)*s)/(1-lamb + gi@gi)
+#        x_half = x - temp1*gi 
+        s_half = (1-lamb)* (s + temp1)
+        q_it_half = loss_i - temp1* (gi@gi) + 0.5*temp1*temp1*(hess_gi@gi)
+        g_q_it_half = gi - temp1*hess_gi
+        temp2 = np.maximum(0,q_it_half - (1-lamb)*s_half)/(1-lamb + g_q_it_half@g_q_it_half)
+        
+        ## Iterative averaging form of momentum
+        z += -lr*temp1*gi 
+        z += -lr*temp2*g_q_it_half
+        x = beta*x +(1.0-beta)*z  # This adds on momentum to x                
+        s = (1-lamb)*(s_half+temp2) # No momentum added to s
+        # ----------------------------------------------------------
+        
+        epoch_running_time += time.time() - start_time
+        
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+            
+    return x, norm_records, loss_records, time_records
+
+
+
+
 def taps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, tau=0.0, tau_lr=0.01, beta=0.0, verbose=0.0):
     """
     (Moving) targetted stochastic polyak method. When tau_lr=0.0 coresponds to the TAPS method.

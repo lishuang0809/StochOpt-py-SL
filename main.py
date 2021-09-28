@@ -5,7 +5,7 @@ import math
 import time
 import numpy as np
 import load_data
-from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2
+from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack
 import utils
 import loss
 import regularizer
@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--regularizer', default="L2", help="regularizer type")
     parser.add_argument('--scale_features', action='store', type=float, dest='scale_features', default=True)
     parser.add_argument('--reg', action='store', type=float, dest='reg', default=None)
+    parser.add_argument('--lamb', action='store', type=float, dest='lamb', default=None)
     parser.add_argument("--lr", action='store', type=float, dest='lr', default=1.0)
     parser.add_argument("--beta", action='store', type=float, dest='beta', default=0.0)
     parser.add_argument("--tol", action='store', type=float, dest='tol', default=None)
@@ -59,6 +60,8 @@ if __name__ == '__main__':
     parser.add_argument('--run_sps', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sps2', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_sps2slack', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sgd', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
@@ -115,6 +118,7 @@ if __name__ == '__main__':
     epochs = opt.epochs
     n_rounds = opt.n_rounds
     x_0 = np.zeros(d)  # np.random.randn(d)
+    s_0 = np.zeros(1)
 
     dict_grad_iter = {}
     dict_loss_iter = {}
@@ -338,6 +342,31 @@ if __name__ == '__main__':
         utils.save(os.path.join(folder_path, 'sp2_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sp2_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp2_grad_time'), grad_time)
+    
+    if opt.run_sps2slack:
+        np.random.seed(0)
+        sps2_lr =1.0
+        eps=0.01
+        if opt.lamb == 0.0:
+            lamb = 0.0
+        else:
+            lamb = opt.lamb
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SP2slack"
+        else:
+            beta = opt.beta
+            algo_name = "SP2slackM" + str(beta)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
+                  "tol": opt.tol, "eps": eps, "lamb": lamb,  "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=sps2slack, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        utils.save(os.path.join(folder_path, 'sp2slack_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'sp2slack_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'sp2slack_grad_time'), grad_time)
 
     if opt.run_taps:
         np.random.seed(0)
@@ -485,3 +514,4 @@ if __name__ == '__main__':
 
     utils.plot_iter(result_dict=dict_grad_iter, problem=data_set, title = opt.name + "-grad-iter", save_path=folder_path)
     utils.plot_iter(result_dict=dict_loss_iter, problem=data_set, title = opt.name + "-loss-iter", save_path=folder_path, gradplot=False)
+  
