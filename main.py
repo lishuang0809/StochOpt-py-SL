@@ -1,19 +1,17 @@
 import os
 import argparse
 import logging
-import math
 import time
 import numpy as np
 import load_data
-from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack
+from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack, spsdam, spsL1
 import utils
-import loss
-import regularizer
+
 
 
 # Press the green button in the gutter to run the script.
-if __name__ == '__main__':
 
+def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', action='store', dest='name',
                         help="name of setup")
@@ -36,6 +34,11 @@ if __name__ == '__main__':
     parser.add_argument('--scale_features', action='store', type=float, dest='scale_features', default=True)
     parser.add_argument('--reg', action='store', type=float, dest='reg', default=None)
     parser.add_argument('--lamb', action='store', type=float, dest='lamb', default=None)
+    parser.add_argument('--lamb_schedule', action='store', default=False, dest='lamb_schedule',
+                        help="name of the lamb scheduling")
+    # parser.add_argument('--lamb_schedule', default=False,
+    #                     type=lambda x: (str(x).lower() in ['sublinear', 'linear', 'log']))
+    parser.add_argument('--delta', action='store', type=float, dest='delta', default=None)
     parser.add_argument("--lr", action='store', type=float, dest='lr', default=1.0)
     parser.add_argument("--beta", action='store', type=float, dest='beta', default=0.0)
     parser.add_argument("--tol", action='store', type=float, dest='tol', default=None)
@@ -63,6 +66,10 @@ if __name__ == '__main__':
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sps2slack', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_spsdam', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_spsL1', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sgd', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_adam', default=False,
@@ -76,7 +83,9 @@ if __name__ == '__main__':
     parser.add_argument("--tau_lr", action='store', type=float, dest='tau_lr', default=None)   
     parser.add_argument("--motaps_lr", action='store', type=float, dest='motaps_lr', default=None)
     opt = parser.parse_args()
+    return opt
 
+def run(opt):
     data_set = opt.data_set
     folder_path = os.path.join(opt.folder, data_set)
     if not os.path.exists(folder_path):
@@ -347,7 +356,7 @@ if __name__ == '__main__':
         np.random.seed(0)
         sps2_lr =1.0
         eps=0.01
-        if opt.lamb == 0.0:
+        if opt.lamb is None:
             lamb = 0.0
         else:
             lamb = opt.lamb
@@ -367,6 +376,62 @@ if __name__ == '__main__':
         utils.save(os.path.join(folder_path, 'sp2slack_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sp2slack_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp2slack_grad_time'), grad_time)
+
+    if opt.run_spsdam:
+        np.random.seed(0)
+        spsdam_lr =1.0
+        if opt.lamb is None:
+            lamb = 0.5
+        else:
+            lamb = opt.lamb
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SPSdam"
+        else:
+            beta = opt.beta
+            algo_name = "SPSdamM" + str(beta)
+        if opt.lamb_schedule is not False:
+            algo_name = algo_name + opt.lamb_schedule
+
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsdam_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
+                  "tol": opt.tol, "eps": eps, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=spsdam, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        utils.save(os.path.join(folder_path, 'spsdam_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'spsdam_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'spsdam_grad_time'), grad_time)
+
+    if opt.run_spsL1:
+        np.random.seed(0)
+        spsL1_lr =1.0
+        if opt.delta is None:
+            delta = 1.0
+        else:
+            delta = opt.delta
+        if opt.lamb is None:
+            lamb = 1.0
+        else:
+            lamb = opt.lamb
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SPSL1"
+        else:
+            beta = opt.beta
+            algo_name = "SPSL1M" + str(beta)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL1_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
+                  "tol": opt.tol, "eps": eps, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "delta": delta, "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=spsL1, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        utils.save(os.path.join(folder_path, 'spsL1_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'spsL1_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'spsL1_grad_time'), grad_time)
+
 
     if opt.run_taps:
         np.random.seed(0)
@@ -491,7 +556,7 @@ if __name__ == '__main__':
             svrg_lr = 0.01
         else:
             svrg_lr = 1/(2.0*L_max)
-        # print("Lmax = ", L_max)
+
         # in the book "Convex Optimization: Algorithms and Complexity, Sébastien Bubeck",
         # the Theorem 6.5 indicates that the theory choice lr of SVRG should be 1/10L.
         # svrg_lr = 0.4 / (max_squared_sum + 4.0 * reg)  # theory lr
@@ -512,6 +577,13 @@ if __name__ == '__main__':
         if grad_iter:
             dict_grad_iter["SVRG"] = grad_iter
 
+     
     utils.plot_iter(result_dict=dict_grad_iter, problem=data_set, title = opt.name + "-grad-iter", save_path=folder_path)
     utils.plot_iter(result_dict=dict_loss_iter, problem=data_set, title = opt.name + "-loss-iter", save_path=folder_path, gradplot=False)
-  
+    
+    return dict_grad_iter, dict_loss_iter, data_set, opt.name, folder_path
+
+
+if __name__ == '__main__': 
+    opts = get_args()
+    run(opts)

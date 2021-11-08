@@ -327,6 +327,153 @@ def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
 
     return x, norm_records, loss_records, time_records
 
+def lamb_scheduler(lamb_schedule, start, end, length):
+    r""" Returns a array lambts with lambdas that begin in start and finish in end """
+    if lamb_schedule is not False:
+        if lamb_schedule == "linear":
+            lambts = np.linspace(start, end, num=length)
+        elif lamb_schedule == "log":
+            alpha = 0.1  #early stopping
+            lambts = np.linspace(np.exp(start), (1-alpha)*np.exp(start)+alpha*np.exp(end), num=length)
+            lambts = np.log(lambts)
+        elif lamb_schedule == "loglog":
+            pend = np.exp(np.exp(start))
+            lambts = np.linspace(pend, np.exp(start), num=length)
+            lambts = np.log(np.log(lambts))
+        else: # linear 
+            lambts = np.linspace(start, end, num=length)
+    return lambts
+
+
+
+def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, tol=None, eps=0.001, verbose=1, beta=0.0):
+    r"""Dampened Stochastic Polyak solver (SPSDam).
+    Based on the projection
+    w',  s' = argmin_{w\in\R^d} (1-lmbda)||w - w^t||^2
+          + (1-lmbda) (s-s^t)^2+ lmbda s^2
+                    subject to value + <grad, w - w^t> <= s
+       To which the solution is
+          step = (value - (1-lmbda) s)_+) / (||grad||^2 + 1 - lmbda)
+          w = w -  step *grad,
+          s = (1-lmbda)*(s + step)
+       Consequently when lmbda -> 1, this method becomes SPS. """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+#    z_s = s_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+    # Set a schedule that starts at 0 and ends at 1.
+    iis = np.random.randint(0, n, n * epoch + 1)
+
+    lambts = lamb_scheduler(lamb_schedule, 1.0, 0.0, len(iis))
+
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+        # set the lambda
+        if lamb_schedule is not False:
+            lamb = lambts[idx] 
+        start_time = time.time()        
+        # ith data point
+        di = data[i, :] 
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x)  + reg * regularizer.val(x)   
+        # gradient of (i-1)-th data point
+        lprime = loss.prime(label[i], di @ x)
+        gi = lprime * di + reg * regularizer.prime(x)
+        # --------computing the stepsize -------
+        stepsize = np.maximum(0.0,loss_i - (1.0 - lamb)*s)/ (np.dot(gi, gi) + 1 - lamb)
+        # --------updating the slack -------
+        s  = (1-lr*lamb)*s  +(1-lamb)*lr*stepsize
+        ## Iterative averaging form of momentum
+        z += -stepsize*lr*gi 
+        x = beta*x +(1.0-beta)*z  # This adds on momentum to x     
+        # ----------------------------------------------------------
+        epoch_running_time += time.time() - start_time
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+            
+    return x, norm_records, loss_records, time_records
+
+def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, delta, tol=None, eps=0.001, verbose=1, beta=0.0):
+    r"""The L1 slack SPS method (SPSL1).
+    Based on the projection problem
+         w',  s' = argmin_{w\in\R^d} ||w - w^t||^2  + delta^-1 (s-s^t)^2+ 2lmbda |s|
+                   subject to value + <grad, w - w^t> <= s,  s >= 0.
+      To which the solution is
+        step1 = (value-s+\delta\lmbda)_+/ (\delta+ ||grad||^2)
+        spsstep = value /||grad||^2
+        w  = w - min( step1, spsstep) grad.
+        s  =   ( s-lmbda delta + delta *step1)_+
+      Consequently as delta -> 0 with s_0 =0 this method becomes the SPS method """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+#    z_s = s_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+    
+    iis = np.random.randint(0, n, n * epoch + 1)
+    lambts = lamb_scheduler(lamb_schedule, 0.0, 1.0, len(iis))
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    for idx in range(len(iis)):
+        i = iis[idx]
+        if lamb_schedule is not False:
+            lamb = lambts[idx] 
+        start_time = time.time()        
+        # ith data point
+        di = data[i, :] 
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x)  + reg * regularizer.val(x)   
+        # gradient of (i-1)-th data point
+        lprime = loss.prime(label[i], di @ x)
+        gi = lprime * di + reg * regularizer.prime(x)
+        # --------computing the stepsize -------
+        stepdam = np.maximum(0, loss_i-s+delta*lamb)/ (delta+ np.dot(gi, gi))
+        spsstep = loss_i /np.dot(gi, gi)
+        stepsize = np.minimum( stepdam, spsstep) 
+
+        # --------updating the slack -------
+        s  =   np.maximum(0, s-lamb* delta + delta *stepdam)
+        
+        ## Iterative averaging form of momentum
+        z += -stepsize*lr*gi 
+        x = beta*x +(1.0-beta)*z  # This adds on momentum to x     
+        # ----------------------------------------------------------
+        epoch_running_time += time.time() - start_time
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return x, norm_records, loss_records, time_records
+            
+    return x, norm_records, loss_records, time_records
 
 def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, sps_max=100, beta=0.0):
     """
