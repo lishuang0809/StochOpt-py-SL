@@ -26,23 +26,36 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
-betas=(0.0 0.3 0.5 0.7 0.8)
+regs=(0.001 0.003 0.005 0.007 0.009)
+betas=(0.0 0.3 0.5 0.7)
 DATASET=("colon-cancer") #mushrooms duke colon-cancer
+NUM_regs=${#regs[@]} 
 NUM_betas=${#betas[@]}
 NUM_DATASETS=${#DATASET[@]}
+
 
 for (( j=0; j<$NUM_DATASETS; j++ ))
 do
     for (( r=0; r<$NUM_betas; r++ ))
     do
-        NAME="${DATASET[j]}-${betas[r]}"
-        python main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
-                    --name $NAME --result_folder 'sps2_slack' --log_file "log-${NAME}.txt" \
-                    --epochs 50 --n_repetition 1 --reg 0.0 --tol 1e-8 --lamb 0.5  \
-                    --loss "Logistic" --regularizer 'L2'  \
-                    --run_sps True --run_sgd True --run_adam True --run_sps2 True --run_sps2slack True  --beta ${betas[r]} 
+        for (( s=0; s<$NUM_regs; s++ ))
+        do
+            NAME="${DATASET[j]}-${betas[r]}"
+            python main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
+                        --name $NAME --result_folder 'sps2_slack' --log_file "log-${NAME}.txt" \
+                        --epochs 50 --n_repetition 1 --reg ${regs[s]} --tol 1e-8 --lamb 0.5  \
+                        --loss "Logistic" --regularizer 'L2'  \
+                        --run_sps True --run_sgd True --run_adam True --run_sps2 True --run_sps2slack True  --beta ${betas[r]} 
+   #    echo "Finished regularization ${regs[s]}"
+        done
+        
+#        utils.plot_grad_time(result_dict=dict_time_iter, problem=data_set, title = opt.name + "-time-iter-reg" + str(reg), save_path=folder_path)
+        
+
     done
+
     echo "Finished ${DATASET[j]}"
 done
 
-
+#python plottime.py --regs ${regs} --betas ${betas}     
+#echo "Finished plotting time"

@@ -15,7 +15,7 @@ def update_records_and_print(cnt, loss,loss_x0, regularizer, data, label, lr, re
     # y_hat = np.sign(data @ x)
     # acc_records.append(np.sum(y_hat == label)/n)
     total_running_time += epoch_running_time
-    time_records.append(total_running_time)
+    time_records.append(total_running_time)  
     # Print progress
     if verbose == 1:
         logging.info(
@@ -260,6 +260,7 @@ def sgd(loss, regularizer, data, label, lrs, reg, epoch, x_0, tol=None, beta = 0
     iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+#    total_start_time = time.time()
     for idx in range(len(iis)):
         i = iis[idx]
 
@@ -280,7 +281,9 @@ def sgd(loss, regularizer, data, label, lrs, reg, epoch, x_0, tol=None, beta = 0
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return x, norm_records, loss_records, time_records
-
+            #    total_running_time += time.time() - total_start_time
+#    print("sgd:")
+#    print(total_running_time)
     return x, norm_records, loss_records, time_records
 
 
@@ -301,6 +304,7 @@ def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
     iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+#    total_start_time = time.time()
     for idx in range(len(iis)):
         i = iis[idx]
 
@@ -324,7 +328,9 @@ def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return x, norm_records, loss_records, time_records
-
+            #    total_running_time += time.time() - total_start_time
+#    print("adam:")
+#    print(total_running_time)
     return x, norm_records, loss_records, time_records
 
 
@@ -348,6 +354,7 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
     iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+#    total_start_time = time.time()
     for idx in range(len(iis)):
         i = iis[idx]
 
@@ -375,7 +382,9 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return x, norm_records, loss_records, time_records
-
+            #    total_running_time += time.time() - total_start_time
+#    print("sps:")
+#    print(total_running_time)
     return x, norm_records, loss_records, time_records
 
 
@@ -398,6 +407,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
     iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+#    total_start_time = time.time()
     for idx in range(len(iis)):
         i = iis[idx]
         # import pdb; pdb.set_trace()
@@ -435,7 +445,9 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return x, norm_records, loss_records, time_records
-
+            #    total_running_time += time.time() - total_start_time
+#    print("sps2:")
+#    print(total_running_time)
     return x, norm_records, loss_records, time_records
 
 
@@ -460,6 +472,7 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
     iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+#    total_start_time = time.time()
     for idx in range(len(iis)):
         i = iis[idx]
         # import pdb; pdb.set_trace()
@@ -500,7 +513,9 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return x, norm_records, loss_records, time_records
-            
+            #    total_running_time += time.time() - total_start_time 
+            #    print("sps2slack:")
+            #    print(total_running_time)
     return x, norm_records, loss_records, time_records
 
 
