@@ -379,8 +379,8 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
     lr = lr*(1+beta/(1-beta))
     # Set a schedule that starts at 0 and ends at 1.
     iis = np.random.randint(0, n, n * epoch + 1)
-
-    lambts = lamb_scheduler(lamb_schedule, 1.0, 0.98, len(iis))
+    if lamb_schedule is not False:
+        lambts = lamb_scheduler(lamb_schedule, 1.0, 0.98, len(iis))
 
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
@@ -446,7 +446,8 @@ def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_s
     lr = lr*(1+beta/(1-beta))
     
     iis = np.random.randint(0, n, n * epoch + 1)
-    lambts = lamb_scheduler(lamb_schedule, 0.0, 1.0, len(iis))
+    if lamb_schedule is not False:
+        lambts = lamb_scheduler(lamb_schedule, 0.0, 1.0, len(iis))
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
     for idx in range(len(iis)):

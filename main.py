@@ -421,7 +421,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         np.random.seed(0)
         spsdam_lr =1.0
         if opt.lamb is None:
-            lamb = 0.5
+            lamb = 0.98
         else:
             lamb = opt.lamb
         if opt.beta == 0.0:
@@ -432,6 +432,8 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
             algo_name = "SPSdamM" + str(beta)
         if opt.lamb_schedule is not False:
             algo_name = algo_name + opt.lamb_schedule
+        else: 
+            algo_name = algo_name + "-l-" + str(lamb)
 
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsdam_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
@@ -461,6 +463,10 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         else:
             beta = opt.beta
             algo_name = "SPSL1M" + str(beta)
+        if opt.lamb_schedule is not False:
+            algo_name = algo_name + opt.lamb_schedule
+        else: 
+            algo_name = algo_name + "-l-" + str(lamb)
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL1_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
                   "tol": opt.tol, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "delta": delta, "beta": beta}
@@ -555,9 +561,9 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
 
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name="ADAM", algo=adam, algo_kwargs=kwargs, n_repeat=n_rounds)
-        dict_grad_iter["ADAM-reg" + "{:.2e}".format(reg)] = grad_iter
-        dict_loss_iter["ADAM-reg" + "{:.2e}".format(reg)] = loss_iter
-        dict_time_iter["ADAM-reg" + "{:.2e}".format(reg)] = grad_time
+        dict_grad_iter["ADAM"] = grad_iter
+        dict_loss_iter["ADAM"] = loss_iter
+        dict_time_iter["ADAM"] = grad_time
         utils.save(os.path.join(folder_path, 'adam_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'adam_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'adam_grad_time'), grad_time)
@@ -618,9 +624,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         if grad_iter:
             dict_grad_iter["SVRG"] = grad_iter
 
-     
-
-    
+## Final return of run()     
     return dict_grad_iter, dict_loss_iter, dict_time_iter #, opt.data_set, opt.name, folder_path
 
 if __name__ == '__main__': 
