@@ -85,9 +85,9 @@ def get_args():
     opt = parser.parse_args()
     return opt
 
-def run(opt):
-    data_set = opt.data_set
-    folder_path = os.path.join(opt.folder, data_set)
+
+def build_problem(opt):
+    folder_path = os.path.join(opt.folder, opt.data_set)
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
@@ -95,8 +95,6 @@ def run(opt):
                         level=logging.INFO, format='%(message)s')
     logging.info(time.ctime(time.time()))
     logging.info(opt)
-
-    is_uniform = True  # do we use uniform sampling for SAN?
 
     # load data
     X, y = load_data.get_data(opt.data_path)
@@ -113,17 +111,51 @@ def run(opt):
                 loss_type = opt.loss, regularizer_type = opt.regularizer, 
                 bias_term = True, scale_features = opt.scale_features)
 
-    n, d = X.shape
-    logging.info("Number of data points: {:d}; Number of features: {:d}".format(n, d))
-
     if opt.reg is None:
+        n, d = X.shape
         # sig_min = np.min(np.diag(X@X.T))
         # reg = sig_min  / (n**(opt.reg_power_order))
         reg = 1.0  / (n**(opt.reg_power_order))
     else:
         reg = opt.reg
     logging.info("Regularization param: {}".format(reg))
-    # print("reg parameter = ", reg)
+
+    return folder_path, criterion, penalty, reg, X, y 
+
+def run(opt, folder_path, criterion, penalty, reg, X, y):
+    # data_set = opt.data_set
+    # folder_path = os.path.join(opt.folder, data_set)
+    # if not os.path.exists(folder_path):
+    #     os.makedirs(folder_path)
+
+    # logging.basicConfig(filename=os.path.join(folder_path, opt.log_file),
+    #                     level=logging.INFO, format='%(message)s')
+    # logging.info(time.ctime(time.time()))
+    # logging.info(opt)
+
+      # do we use uniform sampling for SAN?
+
+    # # load data
+    # X, y = load_data.get_data(opt.data_path)
+    # X = X.toarray()  # convert from scipy sparse matrix to dense
+    # logging.info("Data Sparsity: {}".format(load_data.sparsity(X)))
+    # if opt.type == 1:
+    #     problem_type = "classification"
+    # elif opt.type == 2:
+    #     problem_type = "regression"
+    # else:
+    #     problem_type = "unknown"
+
+    # criterion, penalty, X, y = load_data.load_problem(X, y, problem_type,
+    #             loss_type = opt.loss, regularizer_type = opt.regularizer, 
+    #             bias_term = True, scale_features = opt.scale_features)
+
+    n, d = X.shape
+    logging.info("Number of data points: {:d}; Number of features: {:d}".format(n, d))
+    # logging.info("Number of data points: {:d}; Number of features: {:d}".format(n, d))
+
+
+
     epochs = opt.epochs
     n_rounds = opt.n_rounds
     x_0 = np.zeros(d)  # np.random.randn(d)
@@ -156,6 +188,7 @@ def run(opt):
 
     if opt.run_san:
         np.random.seed(0)  # random seed to reproduce the experiments
+        is_uniform = True # #TODO: remove this option 
         if is_uniform: # This could be in the initialization of san instead of here?
             dist = None
         else:
@@ -303,9 +336,9 @@ def run(opt):
 
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name=algo_name, algo=sgd, algo_kwargs=kwargs, n_repeat=n_rounds)
-        dict_grad_iter[algo_name + "-reg" + str(reg)] = grad_iter
-        dict_loss_iter[algo_name + "-reg" + str(reg)] = loss_iter
-        dict_time_iter[algo_name + "-reg" + str(reg)] = grad_time
+        dict_grad_iter[algo_name] = grad_iter   
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
         utils.save(os.path.join(folder_path, 'sgd_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sgd_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sgd_grad_time'), grad_time)
@@ -330,9 +363,9 @@ def run(opt):
                   "tol": opt.tol, "eps": eps, "sps_max": sps_max, "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name=algo_name, algo=sps, algo_kwargs=kwargs, n_repeat=n_rounds)
-        dict_grad_iter[algo_name + "-reg" + str(reg)] = grad_iter
-        dict_loss_iter[algo_name + "-reg" + str(reg)] = loss_iter
-        dict_time_iter[algo_name + "-reg" + str(reg)] = grad_time
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
         utils.save(os.path.join(folder_path, 'sp_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sp_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp_grad_time'), grad_time)
@@ -351,9 +384,9 @@ def run(opt):
                   "tol": opt.tol, "eps": eps,  "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name=algo_name, algo=sps2, algo_kwargs=kwargs, n_repeat=n_rounds)
-        dict_grad_iter[algo_name + "-reg" + str(reg)] = grad_iter
-        dict_loss_iter[algo_name + "-reg" + str(reg)] = loss_iter
-        dict_time_iter[algo_name + "-reg" + str(reg)] = grad_time
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
         utils.save(os.path.join(folder_path, 'sp2_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sp2_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp2_grad_time'), grad_time)
@@ -361,7 +394,7 @@ def run(opt):
     if opt.run_sps2slack:
         np.random.seed(0)
         sps2_lr =1.0
-        eps=0.01
+
         if opt.lamb is None:
             lamb = 0.0
         else:
@@ -374,12 +407,12 @@ def run(opt):
             algo_name = "SP2slackM" + str(beta)
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol, "eps": eps, "lamb": lamb,  "beta": beta}
+                  "tol": opt.tol, "lamb": lamb,  "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name=algo_name, algo=sps2slack, algo_kwargs=kwargs, n_repeat=n_rounds)
-        dict_grad_iter[algo_name + "-reg" + str(reg)] = grad_iter
-        dict_loss_iter[algo_name + "-reg" + str(reg)] = loss_iter
-        dict_time_iter[algo_name + "-reg" + str(reg)] = grad_time
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
         utils.save(os.path.join(folder_path, 'sp2slack_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sp2slack_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp2slack_grad_time'), grad_time)
@@ -402,7 +435,7 @@ def run(opt):
 
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsdam_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol, "eps": eps, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "beta": beta}
+                  "tol": opt.tol,  "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name=algo_name, algo=spsdam, algo_kwargs=kwargs, n_repeat=n_rounds)
         dict_grad_iter[algo_name] = grad_iter
@@ -430,7 +463,7 @@ def run(opt):
             algo_name = "SPSL1M" + str(beta)
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL1_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol, "eps": eps, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "delta": delta, "beta": beta}
+                  "tol": opt.tol, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "delta": delta, "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name=algo_name, algo=spsL1, algo_kwargs=kwargs, n_repeat=n_rounds)
         dict_grad_iter[algo_name] = grad_iter
@@ -522,9 +555,9 @@ def run(opt):
 
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
             algo_name="ADAM", algo=adam, algo_kwargs=kwargs, n_repeat=n_rounds)
-        dict_grad_iter["ADAM-reg" + str(reg)] = grad_iter
-        dict_loss_iter["ADAM-reg" + str(reg)] = loss_iter
-        dict_time_iter["ADAM-reg" + str(reg)] = grad_time
+        dict_grad_iter["ADAM-reg" + "{:.2e}".format(reg)] = grad_iter
+        dict_loss_iter["ADAM-reg" + "{:.2e}".format(reg)] = loss_iter
+        dict_time_iter["ADAM-reg" + "{:.2e}".format(reg)] = grad_time
         utils.save(os.path.join(folder_path, 'adam_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'adam_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'adam_grad_time'), grad_time)
@@ -586,19 +619,24 @@ def run(opt):
             dict_grad_iter["SVRG"] = grad_iter
 
      
-    utils.plot_iter(result_dict=dict_grad_iter, problem=data_set, title = opt.name + "-grad-iter", save_path=folder_path)
-    utils.plot_iter(result_dict=dict_loss_iter, problem=data_set, title = opt.name + "-loss-iter", save_path=folder_path, gradplot=False)
+
+    
+    return dict_grad_iter, dict_loss_iter, dict_time_iter #, opt.data_set, opt.name, folder_path
+
+if __name__ == '__main__': 
+
+    opt = get_args()   #get options and parameters from parser
+    folder_path, criterion, penalty, reg, X, y  = build_problem(opt)  #build the optimization problem
+    dict_grad_iter, dict_loss_iter, dict_time_iter  = run(opt, folder_path, criterion, penalty, reg, X, y)
+
+    #Plot the training loss and gradient convergence
+    utils.plot_iter(result_dict=dict_grad_iter, problem=opt.data_set, title = opt.name + "-grad-iter" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path)
+    utils.plot_iter(result_dict=dict_loss_iter, problem=opt.data_set, title = opt.name + "-loss-iter" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, gradplot=False)
 
     # Some code Shuang wrote
     dict_time_iter_sum = {} 
     for key in dict_time_iter: 
         dict_time_iter_sum[key] = sum(sum(np.array(dict_time_iter[key]))) 
-        
-    with open(os.path.join(folder_path, 'dict_time_iter_sum_'+'M'+ str(beta)+'-reg'+ str(reg)), 'wb') as fp:
+    # Some code Shuang wrote
+    with open(os.path.join(folder_path, 'dict_time_iter_sum_'+'M'+ str(opt.beta)+'-reg'+ "{:.2e}".format(reg)), 'wb') as fp:
          pickle.dump(dict_time_iter_sum, fp)
-    
-    return dict_grad_iter, dict_loss_iter, data_set, opt.name, folder_path
-
-if __name__ == '__main__': 
-    opts = get_args()
-    run(opts)

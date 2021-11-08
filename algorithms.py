@@ -339,7 +339,7 @@ def lamb_scheduler(lamb_schedule, start, end, length):
         if lamb_schedule == "linear":
             lambts = np.linspace(start, end, num=length)
         elif lamb_schedule == "log":
-            alpha = 0.1  #early stopping
+            alpha = 1.0  #early stopping
             lambts = np.linspace(np.exp(start), (1-alpha)*np.exp(start)+alpha*np.exp(end), num=length)
             lambts = np.log(lambts)
         elif lamb_schedule == "loglog":
@@ -347,12 +347,13 @@ def lamb_scheduler(lamb_schedule, start, end, length):
             lambts = np.linspace(pend, np.exp(start), num=length)
             lambts = np.log(np.log(lambts))
         else: # linear 
-            lambts = np.linspace(start, end, num=length)
+            print(lamb_schedule)
+            raise ValueError('There does not exist a lambda scheduler called the above ')
     return lambts
 
 
 
-def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, tol=None, eps=0.001, verbose=1, beta=0.0):
+def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, tol=None,  verbose=1, beta=0.0):
     r"""Dampened Stochastic Polyak solver (SPSDam).
     Based on the projection
     w',  s' = argmin_{w\in\R^d} (1-lmbda)||w - w^t||^2
@@ -379,7 +380,7 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
     # Set a schedule that starts at 0 and ends at 1.
     iis = np.random.randint(0, n, n * epoch + 1)
 
-    lambts = lamb_scheduler(lamb_schedule, 1.0, 0.0, len(iis))
+    lambts = lamb_scheduler(lamb_schedule, 1.0, 0.98, len(iis))
 
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
@@ -396,6 +397,9 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
         # gradient of (i-1)-th data point
         lprime = loss.prime(label[i], di @ x)
         gi = lprime * di + reg * regularizer.prime(x)
+        # --------computing the stepsize -------
+        # transformation to remove (1-lamb) from projection terms
+        # lamb = lamb/(1+lamb)
         # --------computing the stepsize -------
         stepsize = np.maximum(0.0,loss_i - (1.0 - lamb)*s)/ (np.dot(gi, gi) + 1 - lamb)
         # --------updating the slack -------
@@ -416,7 +420,7 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
             
     return x, norm_records, loss_records, time_records
 
-def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, delta, tol=None, eps=0.001, verbose=1, beta=0.0):
+def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, delta, tol=None,  verbose=1, beta=0.0):
     r"""The L1 slack SPS method (SPSL1).
     Based on the projection problem
          w',  s' = argmin_{w\in\R^d} ||w - w^t||^2  + delta^-1 (s-s^t)^2+ 2lmbda |s|
@@ -598,7 +602,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
     return x, norm_records, loss_records, time_records
 
 
-def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None, eps=0.001, verbose=1, beta=0.0):
+def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None,  verbose=1, beta=0.0):
     """
     Second order Stochastic Polyak with slack. Introduced an epsilon (eps) in the denominators to avoid overflow
     """
