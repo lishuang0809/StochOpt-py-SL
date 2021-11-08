@@ -43,9 +43,37 @@ def plot_iter(result_dict, problem, title, save_path, threshold=1e-8, gradplot=T
     plt.savefig(os.path.join(save_path, title + ".pdf"), bbox_inches='tight', pad_inches=0.01)
 
 
-def plot_grad_time(result_dict, title, save_path):
-    # TODO
-    return
+#def plot_grad_time(result_dict, problem, title, save_path, threshold=1e-8, fontsize=30):
+#    plt.rc('text', usetex=True)
+#    plt.rc('font', family='sans-serif')
+#    plt.figure(figsize=(9, 8), dpi=1200)
+    
+#    markers = ["^-", "d-", "*-", ">-", "+-", "o-" , "1-", "2-", "3-", "4-", "8-", "s-"]
+#    for algo_name, marker in zip(result_dict.keys(), markers):
+#        result = result_dict[algo_name]
+        # result is a 2-d list with different length,
+        # cut it with min_len and convert it to numpy array for plot
+#        len_cut = len(min(result, key=len))
+#        result = np.array(list(map(lambda arr: arr[:len_cut], result)))
+        # plot
+#        val_avg = np.mean(result, axis=0)
+#        if threshold:
+#            len_cut = np.argmax(val_avg <= threshold) + 1 if np.sum(val_avg <= threshold) > 0 else len(val_avg)
+#            val_avg =val_avg[:len_cut]
+#        val_min = np.min(result, axis=0)[:len(val_avg)]
+#        val_max = np.max(result, axis=0)[:len(val_avg)]
+#        plt.plot(np.arange(len(val_avg)), val_avg, marker, label=algo_name, lw=2)
+#        plt.fill_between(np.arange(len(val_avg)), val_min, val_max, alpha=0.2)
+        
+#    plt.tick_params(labelsize=20)
+#    plt.legend(fontsize=fontsize)
+#    plt.xlabel("Regularization", fontsize=25)    
+#    plt.ylabel("Running Time", fontsize=25)    
+#    plt.title(title, fontsize=25)
+#    if not os.path.exists(save_path):
+#        os.makedirs(save_path)
+#    plt.savefig(os.path.join(save_path, title + ".pdf"), bbox_inches='tight', pad_inches=0.01)
+            
 
 
 def run_algorithm(algo_name, algo, algo_kwargs, n_repeat):
