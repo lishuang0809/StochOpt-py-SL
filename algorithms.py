@@ -280,6 +280,7 @@ def sgd(loss, regularizer, data, label, lrs, reg, epoch, x_0, tol=None, beta = 0
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
+                print("SGD reaches the tolerance: " + str(tol))
                 return x, norm_records, loss_records, time_records
             #    total_running_time += time.time() - total_start_time
 #    print("sgd:")
@@ -327,6 +328,7 @@ def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
+                print("ADAM reaches the tolerance: " + str(tol))
                 return x, norm_records, loss_records, time_records
             #    total_running_time += time.time() - total_start_time
 #    print("adam:")
@@ -533,6 +535,7 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
+                print("SPS reaches the tolerance: " + str(tol))
                 return x, norm_records, loss_records, time_records
             #    total_running_time += time.time() - total_start_time
 #    print("sps:")
@@ -596,6 +599,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
+                print("SPS2 reaches the tolerance: " + str(tol))
                 return x, norm_records, loss_records, time_records
             #    total_running_time += time.time() - total_start_time
 #    print("sps2:")
@@ -664,6 +668,7 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
+                print("SPS2slack reaches the tolerance: " + str(tol))
                 return x, norm_records, loss_records, time_records
             #    total_running_time += time.time() - total_start_time 
             #    print("sps2slack:")
