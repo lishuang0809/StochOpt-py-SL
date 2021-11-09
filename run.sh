@@ -15,10 +15,9 @@
 # --run_newton False --run_gd False
 python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-cancer' \
                --name 'colon' --result_folder 'logistic' --log_file 'log1.txt' \
-               --epochs 75 --n_repetition 10 --reg_power_order 1.0 --tol 1e-8  \
+               --epochs 50 --n_repetition 10 --reg_power_order 5.0 --tol 1e-8  \
                --loss "Logistic" --regularizer 'L2'  \
-               --run_sag True --run_svrg True --run_sps True --run_sgd True \
-               --run_taps True --run_motaps True 
+               --run_sps True --run_sgd True --run_spsL1 True --run_spsdam True --run_adam True --beta 0.5
 
 
  

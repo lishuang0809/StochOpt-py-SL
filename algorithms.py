@@ -87,8 +87,8 @@ def san(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
-    return x, norm_records, loss_records, time_records #loss_records, 
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records} #loss_records, 
 
 
 def sana(loss, regularizer, data, label, reg, epoch, x_0, tol=None, verbose=1):
@@ -135,8 +135,8 @@ def sana(loss, regularizer, data, label, reg, epoch, x_0, tol=None, verbose=1):
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
-    return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def svrg2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1, dist=None):
@@ -187,8 +187,8 @@ def svrg2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
-    return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def svrg2_old(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=None, verbose=1):
@@ -280,11 +280,11 @@ def sgd(loss, regularizer, data, label, lrs, reg, epoch, x_0, tol=None, beta = 0
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
             #    total_running_time += time.time() - total_start_time
 #    print("sgd:")
 #    print(total_running_time)
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
@@ -300,7 +300,7 @@ def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     norm_records = [np.sqrt(g @ g)]
     loss_records = [1.0]
-
+    stepsize_records = []
     iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
@@ -316,22 +316,24 @@ def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
         mhat= m/(1-beta1**(idx+1))
         vhat= v/(1-beta2**(idx+1))
         direction = lr*mhat/(np.sqrt(vhat) +eps)
-        # update
+        # update 
         x -= direction
         epoch_running_time += time.time() - start_time
 
         if (idx + 1) % n == 0:
             cnt += 1
+            stepsize = np.mean(lr/(np.sqrt(vhat) +eps))
+            stepsize_records.append(stepsize)
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
             #    total_running_time += time.time() - total_start_time
 #    print("adam:")
 #    print(total_running_time)
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
 def lamb_scheduler(lamb_schedule, start, end, length):
     r""" Returns a array lambts with lambdas that begin in start and finish in end """
@@ -346,6 +348,8 @@ def lamb_scheduler(lamb_schedule, start, end, length):
             pend = np.exp(np.exp(start))
             lambts = np.linspace(pend, np.exp(start), num=length)
             lambts = np.log(np.log(lambts))
+        elif lamb_schedule == "ada":
+            lambts = []
         else: # linear 
             print(lamb_schedule)
             raise ValueError('There does not exist a lambda scheduler called the above ')
@@ -375,20 +379,24 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     norm_records = [np.sqrt(g @ g)]
     loss_records = [1.0]
+    stepsize_records = []
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
     # Set a schedule that starts at 0 and ends at 1.
     iis = np.random.randint(0, n, n * epoch + 1)
     if lamb_schedule is not False:
-        lambts = lamb_scheduler(lamb_schedule, 1.0, 0.98, len(iis))
-
+        lambts = lamb_scheduler(lamb_schedule, 1.0, 0.5, len(iis))
+        # lambts = lamb_scheduler(lamb_schedule, 1.0, 0.98, len(iis))
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
     for idx in range(len(iis)):
         i = iis[idx]
         # set the lambda
         if lamb_schedule is not False:
-            lamb = lambts[idx] 
+            if lamb_schedule == "ada":
+                lamb = s
+            else: 
+                lamb = lambts[idx] 
         start_time = time.time()        
         # ith data point
         di = data[i, :] 
@@ -402,6 +410,7 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
         # lamb = lamb/(1+lamb)
         # --------computing the stepsize -------
         stepsize = np.maximum(0.0,loss_i - (1.0 - lamb)*s)/ (np.dot(gi, gi) + 1 - lamb)
+        stepsize = stepsize[0]
         # --------updating the slack -------
         s  = (1-lr*lamb)*s  +(1-lamb)*lr*stepsize
         ## Iterative averaging form of momentum
@@ -411,14 +420,15 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
         epoch_running_time += time.time() - start_time
         if (idx + 1) % n == 0:
             cnt += 1
+            stepsize_records.append(stepsize)
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
             
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
 def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, delta, tol=None,  verbose=1, beta=0.0):
     r"""The L1 slack SPS method (SPSL1).
@@ -442,6 +452,7 @@ def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_s
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     norm_records = [np.sqrt(g @ g)]
     loss_records = [1.0]
+    stepsize_records = []
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
     
@@ -453,7 +464,10 @@ def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_s
     for idx in range(len(iis)):
         i = iis[idx]
         if lamb_schedule is not False:
-            lamb = lambts[idx] 
+            if lamb_schedule == "ada":
+                lamb = s
+            else: 
+                lamb = lambts[idx] 
         start_time = time.time()        
         # ith data point
         di = data[i, :] 
@@ -466,7 +480,7 @@ def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_s
         stepdam = np.maximum(0, loss_i-s+delta*lamb)/ (delta+ np.dot(gi, gi))
         spsstep = loss_i /np.dot(gi, gi)
         stepsize = np.minimum( stepdam, spsstep) 
-
+        stepsize = stepsize[0]
         # --------updating the slack -------
         s  =   np.maximum(0, s-lamb* delta + delta *stepdam)
         
@@ -477,14 +491,15 @@ def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_s
         epoch_running_time += time.time() - start_time
         if (idx + 1) % n == 0:
             cnt += 1
+            stepsize_records.append(stepsize)
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
             
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
 def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, sps_max=100, beta=0.0):
     """
@@ -500,6 +515,7 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     norm_records = [np.sqrt(g @ g)]
     loss_records = [1.0]
+    stepsize_records = []
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
 
@@ -528,16 +544,15 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
 
         if (idx + 1) % n == 0:
             cnt += 1
+            stepsize_records.append(stepsize)
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
-            #    total_running_time += time.time() - total_start_time
-#    print("sps:")
-#    print(total_running_time)
-    return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+ 
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
 
 def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, beta=0.0):
@@ -596,11 +611,11 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
             #    total_running_time += time.time() - total_start_time
 #    print("sps2:")
 #    print(total_running_time)
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None,  verbose=1, beta=0.0):
@@ -664,11 +679,11 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
             #    total_running_time += time.time() - total_start_time 
             #    print("sps2slack:")
             #    print(total_running_time)
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 
@@ -733,10 +748,10 @@ def taps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, tau=0.0,
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
-    return x, norm_records, loss_records, time_records
-    return
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
+
 
 def sag(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1):
     """
@@ -787,9 +802,9 @@ def sag(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
                              total_running_time, epoch_running_time, verbose)   
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def svrg(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1):
@@ -827,7 +842,7 @@ def svrg(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
         if tol is not None and norm_records[-1] <= tol:
-            return x, norm_records, loss_records, time_records
+            return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
         iis = np.random.randint(low=0, high=n, size=n)
         epoch_running_time = 0.0
@@ -856,9 +871,9 @@ def svrg(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=
         #                                                                                       epoch_running_time,
         #                                                                                       norm_records[-1]))
         if tol is not None and norm_records[-1] <= tol:
-            return x, norm_records, loss_records, time_records
+            return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def snm(loss, data, label, reg, epoch, x_0, tol=None, verbose=1):
@@ -917,9 +932,9 @@ def snm(loss, data, label, reg, epoch, x_0, tol=None, verbose=1):
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                return x, norm_records, loss_records, time_records
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def vsn(func, data, label, reg, epoch, x_0, tol=None, verbose=1):
@@ -960,9 +975,9 @@ def gd(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1)
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
         if tol is not None and norm_records[-1] <= tol:
-            return x, norm_records, loss_records, time_records
+            return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
 
 def newton(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1):
@@ -996,6 +1011,6 @@ def newton(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbos
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
         if tol is not None and norm_records[-1] <= tol:
-            return x, norm_records, loss_records, time_records
+            return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
-    return x, norm_records, loss_records, time_records
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
