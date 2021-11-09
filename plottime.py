@@ -12,7 +12,9 @@ import pickle
 
 #    regs = np.array(opt.regs)
 #    betas = np.array(opt.betas)
-regs=np.array([0.001, 0.003, 0.005, 0.007, 0.009])
+#regs=np.array([0.001, 0.003, 0.005, 0.007, 0.009])
+#betas=np.array([0.0, 0.3, 0.5, 0.7])
+regs=np.array([0.000, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009])
 betas=np.array([0.0, 0.3, 0.5, 0.7])
 NUM_regs=len(regs) 
 NUM_betas=len(betas)
@@ -26,15 +28,15 @@ for r in range(NUM_betas):
     rtime = np.zeros((NUM_regs, 5))
     marker = markers[r]
     for s in range(NUM_regs):
-        reg = regs[s]        
-        with open(os.path.join('sps2_slack/colon-cancer', 'dict_time_iter_sum_'+'M'+ str(beta)+'-reg'+ str(reg)), 'rb') as fp:
+        reg = regs[s]     
+        with open(os.path.join('sps2_slack/colon-cancer', 'dict_time_iter_sum_'+'M'+ str(beta)+'-reg'+ "{:.2e}".format(reg)), 'rb') as fp:
             grad_iter = pickle.load(fp) 
             rtime[s,:] = list(grad_iter.values()) 
     plt.title("colon-cancer-runtime-M"+str(beta),fontsize=fs)
     plt.xlabel("Regularization",fontsize=fs)
     plt.ylabel("Running time",fontsize=fs)
     fig1 = plt.gcf()
-    plt.plot(regs, rtime, marker, lw=2)
+    plt.semilogy(regs, rtime, marker, lw=2)
     plt.rc('xtick', labelsize=fs) 
     plt.rc('ytick', labelsize=fs) 
     plt.gca().legend(('SGD','SP','SP2','SP2slack','ADAM'))   

@@ -26,7 +26,9 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
-regs=(0.001 0.003 0.005 0.007 0.009)
+#regs=(0.001 0.003 0.005 0.007 0.009)
+#betas=(0.0 0.3 0.5 0.7)
+regs=(0.000 0.001 0.002 0.003 0.004 0.005 0.006 0.007 0.008 0.009)
 betas=(0.0 0.3 0.5 0.7)
 DATASET=("colon-cancer") #mushrooms duke colon-cancer
 NUM_regs=${#regs[@]} 
@@ -43,7 +45,7 @@ do
             NAME="${DATASET[j]}-${betas[r]}"
             python main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
                         --name $NAME --result_folder 'sps2_slack' --log_file "log-${NAME}.txt" \
-                        --epochs 50 --n_repetition 1 --reg ${regs[s]} --tol 1e-8 --lamb 0.5  \
+                        --epochs 1000 --n_repetition 1 --reg ${regs[s]} --tol 1e-1 --lamb 0.5  \
                         --loss "Logistic" --regularizer 'L2'  \
                         --run_sps True --run_sgd True --run_adam True --run_sps2 True --run_sps2slack True  --beta ${betas[r]} 
    #    echo "Finished regularization ${regs[s]}"
