@@ -14,8 +14,8 @@
 # --run_xx: do we run xx algorithm
 # --run_newton False --run_gd False
 # "colon-cancer" "mushrooms" "duke" "news20.binary" "gisette-scale" "cod-rna.t" "phishing"
-python main.py --type 1 --dataset 'phishing' --data_path './datasets/phishing' \
-               --name 'phishing' --result_folder 'san' --log_file 'log1.txt' \
+python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-cancer' \
+               --name 'colon-cancer' --result_folder 'logistic' --log_file 'log1.txt' \
                --epochs 100 --n_repetition 10 --reg_power_order 1.0 --tol 0.00001  \
                --loss "Logistic" --regularizer 'L2'  \
                --run_sps True --run_sgd True --run_spsL1 True --run_spsL2 True \
