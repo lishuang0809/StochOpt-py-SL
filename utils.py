@@ -3,15 +3,18 @@ import os
 import numpy as np
 import logging
 import pickle
+from scipy.sparse.linalg import norm as spnorm
+from scipy.sparse import issparse
 
-
-def plot_iter(result_dict, problem, title, save_path, threshold=1e-8, yaxislabel=r"$ f(x^k)/f(x^0)$", fontsize=30):
+def plot_general(result_dict, problem, title, save_path, threshold=False,tol=False, yaxislabel=r"$ f(x^k)/f(x^0)$", xaxislabel="Effective Passes", xticks = None,  logplot = True, fontsize=30):
     plt.rc('text', usetex=True)
     plt.rc('font', family='sans-serif')
     plt.figure(figsize=(9, 8), dpi=1200)
 
     markers = ["^-", "d-", "*-", ">-", "+-", "o-" , "1-", "2-", "3-", "4-", "8-", "s-"]
+    miny= 10000
     for algo_name, marker in zip(result_dict.keys(), markers):
+        print("plotting: ", algo_name)
         result = result_dict[algo_name]
         # result is a 2-d list with different length,
         # cut it with min_len and convert it to numpy array for plot
@@ -22,28 +25,44 @@ def plot_iter(result_dict, problem, title, save_path, threshold=1e-8, yaxislabel
         if threshold:
             len_cut = np.argmax(val_avg <= threshold) + 1 if np.sum(val_avg <= threshold) > 0 else len(val_avg)
             val_avg =val_avg[:len_cut]
-        val_min = np.min(result, axis=0)[:len(val_avg)]
-        val_max = np.max(result, axis=0)[:len(val_avg)]
-        # grad_std = np.std(result, axis=0)
-        # val_min = np.add(val_avg, -grad_std)
-        # val_max = np.add(val_avg, grad_std)
-        plt.semilogy(np.arange(len(val_avg)), val_avg, marker, label=algo_name, lw=2)
-        plt.fill_between(np.arange(len(val_avg)), val_min, val_max, alpha=0.2)
-
+        newlength = len(val_avg)
+        # val_min = np.min(result, axis=0)[:newlength]
+        # val_max = np.max(result, axis=0)[:newlength]
+        std_result = np.std(result, axis=0)[:newlength]
+        val_min = np.add(val_avg, -std_result)
+        val_max = np.add(val_avg, std_result)
+        if xticks is None:
+            xticks_p= np.arange(newlength) 
+        else:
+            xticks_p = xticks[:newlength]
+        markevery = 1
+        if newlength > 20:
+            markevery = int(np.floor(newlength/15))
+        if logplot:
+            plt.semilogy(xticks_p, val_avg, marker, markevery=markevery, label=algo_name, lw=2)
+        else:
+            plt.plot(xticks_p, val_avg, marker, markevery=markevery, label=algo_name, lw=2)
+        plt.fill_between(xticks_p, val_min, val_max, alpha=0.2)
+        # if tol is not False:
+        #     plt.ylim(bottom = tol)
+        newmincand= np.min(val_avg)
+        if miny > newmincand:
+            miny = newmincand
+    plt.ylim(bottom = miny*(0.9))
     plt.tick_params(labelsize=20)
     plt.legend(fontsize=fontsize)
-    plt.xlabel("Effective Passes", fontsize=25)
+    plt.xlabel(xaxislabel, fontsize=25)
     plt.ylabel(yaxislabel, fontsize=25)
-    # if gradplot:
-    #     plt.ylabel(r"$\| \nabla f \|_2$", fontsize=25)
-    # else:
-    #     plt.ylabel(r"$ f(x^k)/f(x^0)$", fontsize=25)    
     plt.title(title, fontsize=25)
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     plt.savefig(os.path.join(save_path, title + ".pdf"), bbox_inches='tight', pad_inches=0.01)
 
-            
+
+
+def plot_iter(result_dict, problem, title, save_path, threshold=False, tol=False, yaxislabel=r"$ f(x^k)/f(x^0)$", fontsize=30):
+    plot_general(result_dict=result_dict, problem=problem, title=title, save_path=save_path, threshold=threshold, tol = tol, yaxislabel=yaxislabel, fontsize=fontsize)
+ 
 def run_algorithm(algo_name, algo, algo_kwargs, n_repeat):
     logging.info("------START {}------".format(algo_name))
     grad_iter, loss_iter, grad_time, stepsizes = [], [],  [], []
@@ -63,6 +82,8 @@ def run_algorithm(algo_name, algo, algo_kwargs, n_repeat):
         return { "grad_iter" : grad_iter, "loss_iter" : loss_iter, "grad_time" : grad_time, "stepsizes" : stepsizes}
     else:
         return { "grad_iter" : grad_iter, "loss_iter" : loss_iter, "grad_time" : grad_time}
+
+
 
 def save(folder_path,algo_name,dict_grad_iter, dict_loss_iter, dict_time_iter):
 
@@ -108,7 +129,11 @@ def max_Li_ridge(X, reg):
 
 
 def max_Li_logistic(X, reg):
-    return 0.25*np.max(np.sum(X ** 2, axis=1)) + reg
+    # import pdb; pdb.set_trace()
+    if issparse(X):
+        return 0.25*spnorm(X.power(2), np.inf) + reg
+    else:    
+        return 0.25*np.max(np.sum(X ** 2, axis=1)) + reg
 
 def compute_L_max(X, reg, loss_type,regularizor_type):
     if loss_type == "L2" and regularizor_type == "L2":

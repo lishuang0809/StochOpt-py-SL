@@ -2,15 +2,33 @@ from pickle import FALSE
 import numpy as np
 import time
 import logging
+from scipy.sparse import issparse
+
+def loss_minibatch(loss, label, data, x, reg, regularizer, minib=None):
+    if(minib is None):  # Full batch
+        return np.mean(loss.val(label, data @ x), axis =0)  + reg * regularizer.val(x)  
+    else:
+        return np.mean(loss.val(label[minib], data[minib, :] @ x), axis =0)  + reg * regularizer.val(x)      
+
+def grad_minibatch(loss, label, data, x, reg, regularizer, minib=None):
+    if(minib is None): # Full batch
+        if(issparse(data)):
+            return np.mean(loss.prime(label, data @ x) * data, axis=0) + reg * regularizer.prime(x)
+        return np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    else:
+        if(issparse(data)):
+            return np.mean(loss.prime(label[minib], data[minib, :] @ x)* data[minib, :], axis =0)  + reg * regularizer.prime(x)
+        return np.mean(loss.prime(label[minib], data[minib, :] @ x).reshape(-1,1)* data[minib, :], axis =0)  + reg * regularizer.prime(x)
+
 
 def update_records_and_print(cnt, loss,loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, #acc_records,
-                             total_running_time, epoch_running_time, verbose):
+                             total_running_time, epoch_running_time, verbose, normg0 =1):
     # Compute full gradient and loss
-    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    lx = np.mean(loss.val(label, data @ x)) + reg * regularizer.val(x)
+    g = grad_minibatch(loss, label, data, x, reg, regularizer)
+    lx = loss_minibatch(loss, label, data, x, reg, regularizer)
     # Update gradient norm, loss and time records
-    norm_records.append(np.sqrt(g @ g))
+    norm_records.append(np.sqrt(g @ g)/normg0)
     loss_records.append(lx/loss_x0)
     # y_hat = np.sign(data @ x)
     # acc_records.append(np.sum(y_hat == label)/n)
@@ -26,8 +44,6 @@ def update_records_and_print(cnt, loss,loss_x0, regularizer, data, label, lr, re
                                                                                             )
     return                                                                            
             
-
-
 def san(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1, dist=None):
     """
     Stochastic Average Newton method for linear model, projection under a norm that depends on hessian of f_i
@@ -46,7 +62,8 @@ def san(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
     """
     # Denote n = n_samples, d = n_features, we have model coefficients x \in R^d,
     # and we introduce n auxiliary variables {alpha_i} \in R^d, thus we have totally (n+1) variables.
-    # We use a big matrix alphas \in \R^{nxd} to store auxiliary variables.
+    # We use a big matrix alphas \in \R^{nxd} to store auxiliary variables.l
+    # initial gradient
     n, d = data.shape
     alphas = np.zeros((n, d))  # auxiliary variables, it represents one alpha per row
     x = x_0.copy()  # model
@@ -55,7 +72,9 @@ def san(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
     # initial gradient
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     # intantiate records
-    norm_records, loss_records  = [np.sqrt(g @ g)], [1.0]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
+    loss_records  =  [1.0]
     time_records = [0.0]
     cnt = 0  # track the effective data passes
     epoch_running_time, total_running_time = 0.0, 0.0
@@ -83,7 +102,7 @@ def san(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
             cnt += 1
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
@@ -103,7 +122,9 @@ def sana(loss, regularizer, data, label, reg, epoch, x_0, tol=None, verbose=1):
     # initial gradient
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
     # intantiate records
-    norm_records, loss_records  = [np.sqrt(g @ g)], [1.0]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
+    loss_records =  [1.0]
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
     iis = np.random.randint(0, n, n * epoch)  # uniform sampling
@@ -131,7 +152,7 @@ def sana(loss, regularizer, data, label, reg, epoch, x_0, tol=None, verbose=1):
             cnt += 1
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
@@ -183,7 +204,7 @@ def svrg2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose
             cnt += 1
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
@@ -243,98 +264,89 @@ def svrg2_old(loss, regularizer, data, label, lr, reg, dist, epoch, x_0, tol=Non
     return W[:, 0], norm_records, time_records
 
 
-def sgd(loss, regularizer, data, label, lrs, reg, epoch, x_0, tol=None, beta = 0.0, verbose=1):
+def sgd(loss, regularizer, data, label, lrs, reg, epoch, x_0, tol=None, beta = 0.0, b = 100, verbose=1):
     """
     Stochastic Gradient Descent with an array of learning rates.
     """
     n, d = data.shape
     x = x_0.copy()
     x_old = x.copy()
-    # init loss
-    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
-    # init grad
-    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    loss_x0 =loss_minibatch(loss, label, data, x, reg, regularizer) # init loss
+    g = grad_minibatch(loss, label, data, x, reg, regularizer) # init grad
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
-
-    iis = np.random.randint(0, n, n * epoch + 1)
+    stepsize_records = []
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-#    total_start_time = time.time()
-    for idx in range(len(iis)):
-        i = iis[idx]
-
+    n_iters = int(np.ceil(n * epoch/b))
+    num_steps_in_epoch = np.floor(n/b)
+    for idx in range(n_iters):
+        minib = np.random.randint(low=0, high=n, size=(b,))
         start_time = time.time()
-        # gradient of (i-1)-th data point
-        grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
-        # update
-        direction = -lrs[i]* grad_i +beta*(x-x_old)
+        gi = grad_minibatch(loss, label, data, x, reg, regularizer, minib)
+        direction = -lrs[idx]* gi +beta*(x-x_old) # update
         x_old = x.copy()
         x+=direction
         epoch_running_time += time.time() - start_time
 
-        if (idx + 1) % n == 0:
+        if (idx + 1) % num_steps_in_epoch == 0:
             cnt += 1
-            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lrs[i], reg, epoch, 
+            stepsize_records.append(lrs[idx])
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lrs[idx], reg, epoch, 
                              x, norm_records, loss_records, time_records, 
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 print("SGD reaches the tolerance: " + str(tol))
-                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
-            #    total_running_time += time.time() - total_start_time
-#    print("sgd:")
-#    print(total_running_time)
-    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
 
-def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None,
+def adam(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, b=100,
          beta1 =0.9, beta2 =0.999, eps = 10**(-8.0), verbose = False):
     """Adam method"""
     n, d = data.shape
     x = x_0.copy()
     m = np.zeros(d)
     v = np.zeros(d)
-    # init loss
-    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
-    # init grad
-    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    loss_x0 =loss_minibatch(loss, label, data, x, reg, regularizer) # init loss
+    g = grad_minibatch(loss, label, data, x, reg, regularizer) # init grad
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     stepsize_records = []
-    iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
-    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-#    total_start_time = time.time()
-    for idx in range(len(iis)):
-        i = iis[idx]
-
+    time_records, epoch_running_time, total_running_time, stepaverage  = [0.0], 0.0, 0.0, 0.0
+    n_iters = int(np.ceil(n * epoch/b))
+    num_steps_in_epoch = np.floor(n/b) 
+    for idx in range(n_iters):
+        minib = np.random.randint(low=0, high=n, size=(b,))
         start_time = time.time()
-        # gradient of (i-1)-th data point
-        g = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+        # gradient of (i-1)-th batch
+        g = grad_minibatch(loss, label, data, x, reg, regularizer, minib)
         m = beta1*m +(1-beta1)*g
         v = beta2*v +(1-beta2)*(g*g)
         mhat= m/(1-beta1**(idx+1))
         vhat= v/(1-beta2**(idx+1))
         direction = lr*mhat/(np.sqrt(vhat) +eps)
-        # update 
-        x -= direction
+        stepaverage += np.mean(lr/(np.sqrt(vhat) +eps))/num_steps_in_epoch
+        x -= direction # update
         epoch_running_time += time.time() - start_time
-
-        if (idx + 1) % n == 0:
+        if (idx + 1) % num_steps_in_epoch == 0:
             cnt += 1
-            stepsize = np.mean(lr/(np.sqrt(vhat) +eps))
-            stepsize_records.append(stepsize)
+            # stepsize = np.mean(lr/(np.sqrt(vhat) +eps))
+            stepsize_records.append(stepaverage)
+            stepaverage=0
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 print("ADAM reaches the tolerance: " + str(tol))
                 return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
-            #    total_running_time += time.time() - total_start_time
-#    print("adam:")
-#    print(total_running_time)
+
     return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
 def lamb_scheduler(lamb_schedule, start, end, length):
@@ -343,8 +355,7 @@ def lamb_scheduler(lamb_schedule, start, end, length):
         if lamb_schedule == "linear":
             lambts = np.linspace(start, end, num=length)
         elif lamb_schedule == "log":
-            alpha = 1.0  #early stopping
-            lambts = np.linspace(np.exp(start), (1-alpha)*np.exp(start)+alpha*np.exp(end), num=length)
+            lambts = np.linspace(np.exp(start), np.exp(end), num=length)
             lambts = np.log(lambts)
         elif lamb_schedule == "loglog":
             pend = np.exp(np.exp(start))
@@ -358,8 +369,56 @@ def lamb_scheduler(lamb_schedule, start, end, length):
     return lambts
 
 
-def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, tol=None,  verbose=1, beta=0.0):
-    r"""Dampened Stochastic Polyak solver (SPSDam).
+## Still working and thikning about this.
+def algo_wrapper(loss, regularizer, data, label, lr, reg, epoch, x_0, algo_kwargs, update_func, init_func, tol=None,  verbose=1, beta=0.0, b=100):
+    r"""A generic wrapper for an algorithm that only provides updates """
+    n, d = data.shape
+    x = x_0.copy()    
+    # init loss
+    loss_x0 =loss_minibatch(loss, label, data, x, reg, regularizer)
+    # init grad
+    g = grad_minibatch(loss, label, data, x, reg, regularizer)
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
+    loss_records = [1.0]
+    stepsize_records = []
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+    n_iters = int(np.ceil(n * epoch/b))
+    num_steps_in_epoch = np.floor(n/b)
+    # Set a schedule that starts at 0 and ends at 1.
+    state = init_func(loss, regularizer, data, label, lr, reg, epoch, x_0, algo_kwargs)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time, stepaverage = [0.0], 0.0, 0.0, 0.0
+    for idx in range(n_iters):
+        minib = np.random.randint(low=0, high=n, size=(b,))
+        start_time = time.time()        
+        # loss of (i-1)-th batch 
+        state.losst = loss_minibatch(loss, label, data, x, reg, regularizer, minib)
+        # gradient of (i-1)-th batch
+        state.gt = grad_minibatch(loss, label, data, x, reg, regularizer, minib)
+        ## Update
+        update_func(state, loss, regularizer, data, label, lr, reg, epoch, x_0, algo_kwargs)
+        ## Iterative averaging form of momentum
+        # z += -stepsize*lr*gi 
+        # x = beta*x +(1.0-beta)*z  # This adds on momentum to x     
+        # ----------------------------------------------------------
+        epoch_running_time += time.time() - start_time
+        if (idx + 1) % num_steps_in_epoch == 0:
+            cnt += 1
+            stepsize_records.append(stepaverage)
+            stepaverage=0
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             state.x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose, normg0)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+            
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+
+def spsL2a(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule=False, tol=None,  verbose=1, beta=0.0, b=100):
+    r"""ALTERNATIVE Dampened Stochastic Polyak solver (spsL2).
     Based on the projection
     w',  s' = argmin_{w\in\R^d} (1-lmbda)||w - w^t||^2
           + (1-lmbda) (s-s^t)^2+ lmbda s^2
@@ -373,45 +432,107 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
     x = x_0.copy()
     z = x_0.copy()
     s = s_0.copy()
-#    z_s = s_0.copy()
     # init loss
-    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    loss_x0 =loss_minibatch(loss, label, data, x, reg, regularizer)
     # init grad
-    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    g = grad_minibatch(loss, label, data, x, reg, regularizer)
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     stepsize_records = []
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
+    n_iters = int(np.ceil(n * epoch/b))
+    num_steps_in_epoch = np.floor(n/b)
     # Set a schedule that starts at 0 and ends at 1.
-    iis = np.random.randint(0, n, n * epoch + 1)
     if lamb_schedule is not False:
-        lambts = lamb_scheduler(lamb_schedule, 1.0, 0.5, len(iis))
-        # lambts = lamb_scheduler(lamb_schedule, 1.0, 0.98, len(iis))
+        lambts = lamb_scheduler(lamb_schedule, 0.5, 0.0, n_iters)
     cnt = 0
-    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-    for idx in range(len(iis)):
-        i = iis[idx]
+    time_records, epoch_running_time, total_running_time, stepaverage = [0.0], 0.0, 0.0, 0.0
+    if lamb_schedule is not False:
+        lamb = lambts[cnt]  
+    for idx in range(n_iters):
+        minib = np.random.randint(low=0, high=n, size=(b,))
+        start_time = time.time()        
+        # loss of (i-1)-th batch 
+        loss_i = loss_minibatch(loss, label, data, x, reg, regularizer, minib)
+        # gradient of (i-1)-th batch
+        gi = grad_minibatch(loss, label, data, x, reg, regularizer, minib)
+        # --------computing the stepsize -------
+        lambinv = 1/(1+lamb)
+        stepsize = np.maximum(0.0,loss_i - s*lambinv)/ (np.dot(gi, gi) + lambinv)
+        stepsize = stepsize[0]
+        stepaverage += stepsize/num_steps_in_epoch
+        # --------updating the slack -------
+        s  = (s  + lr*stepsize)*lambinv
+        ## Iterative averaging form of momentum
+        z += -stepsize*lr*gi 
+        x = beta*x +(1.0-beta)*z  # This adds on momentum to x     
+        # ----------------------------------------------------------
+        epoch_running_time += time.time() - start_time
+        if (idx + 1) % num_steps_in_epoch == 0:
+            cnt += 1
+            # set the lambda
+            if lamb_schedule is not False:
+                lamb = lambts[cnt] 
+            stepsize_records.append(stepaverage)
+            stepaverage=0
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             x, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose, normg0)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+            
+    return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+
+
+def spsL2(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule=False, tol=None,  verbose=1, beta=0.0, b=100):
+    r"""Dampened Stochastic Polyak solver (spsL2).
+    Based on the projection
+    w',  s' = argmin_{w\in\R^d} (1-lmbda)||w - w^t||^2
+          + (1-lmbda) (s-s^t)^2+ lmbda s^2
+                    subject to value + <grad, w - w^t> <= s
+       To which the solution is
+          step = (value - (1-lmbda) s)_+) / (||grad||^2 + 1 - lmbda)
+          w = w -  step *grad,
+          s = (1-lmbda)*(s + step)
+       Consequently when lmbda -> 1, this method becomes SPS. """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+    # init loss
+    loss_x0 =loss_minibatch(loss, label, data, x, reg, regularizer)
+    # init grad
+    g = grad_minibatch(loss, label, data, x, reg, regularizer)
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
+    loss_records = [1.0]
+    stepsize_records = []
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr*(1+beta/(1-beta))
+    n_iters = int(np.ceil(n * epoch/b))
+    # Set a schedule that starts at 0 and ends at 1.
+    if lamb_schedule is not False:
+        lambts = lamb_scheduler(lamb_schedule, 1.0, 0.0, n_iters)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time, stepaverage = [0.0], 0.0, 0.0, 0.0
+    num_steps_in_epoch = np.floor(n/b)
+    for idx in range(n_iters):
+        minib = np.random.randint(low=0, high=n, size=(b,))
         # set the lambda
         if lamb_schedule is not False:
-            if lamb_schedule == "ada":
-                lamb = s
-            else: 
-                lamb = lambts[idx] 
+            lamb = lambts[idx] 
         start_time = time.time()        
-        # ith data point
-        di = data[i, :] 
-        # loss of (i-1)-th data point
-        loss_i = loss.val(label[i], di @ x)  + reg * regularizer.val(x)   
-        # gradient of (i-1)-th data point
-        lprime = loss.prime(label[i], di @ x)
-        gi = lprime * di + reg * regularizer.prime(x)
-        # --------computing the stepsize -------
-        # transformation to remove (1-lamb) from projection terms
-        # lamb = lamb/(1+lamb)
+        # loss of (i-1)-th batch 
+        loss_i = loss_minibatch(loss, label, data, x, reg, regularizer, minib)
+        # gradient of (i-1)-th batch
+        gi = grad_minibatch(loss, label, data, x, reg, regularizer, minib)
         # --------computing the stepsize -------
         stepsize = np.maximum(0.0,loss_i - (1.0 - lamb)*s)/ (np.dot(gi, gi) + 1 - lamb)
         stepsize = stepsize[0]
+        stepaverage += stepsize/num_steps_in_epoch
         # --------updating the slack -------
         s  = (1-lr*lamb)*s  +(1-lamb)*lr*stepsize
         ## Iterative averaging form of momentum
@@ -419,19 +540,20 @@ def spsdam(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_
         x = beta*x +(1.0-beta)*z  # This adds on momentum to x     
         # ----------------------------------------------------------
         epoch_running_time += time.time() - start_time
-        if (idx + 1) % n == 0:
+        if (idx + 1) % num_steps_in_epoch == 0:
             cnt += 1
-            stepsize_records.append(stepsize)
+            stepsize_records.append(stepaverage)
+            stepaverage=0
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
             
     return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
-def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule, delta, tol=None,  verbose=1, beta=0.0):
+def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, delta,lamb_schedule=False, tol=None,  verbose=1, beta=0.0, b=100):
     r"""The L1 slack SPS method (SPSL1).
     Based on the projection problem
          w',  s' = argmin_{w\in\R^d} ||w - w^t||^2  + delta^-1 (s-s^t)^2+ 2lmbda |s|
@@ -448,61 +570,61 @@ def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_s
     s = s_0.copy()
 #    z_s = s_0.copy()
     # init loss
-    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    loss_x0 =loss_minibatch(loss, label, data, x, reg, regularizer)
     # init grad
-    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    g = grad_minibatch(loss, label, data, x, reg, regularizer)
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     stepsize_records = []
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
-    
-    iis = np.random.randint(0, n, n * epoch + 1)
+    n_iters = int(np.ceil(n * epoch/b))
     if lamb_schedule is not False:
-        lambts = lamb_scheduler(lamb_schedule, 0.0, 1.0, len(iis))
+        lambts = lamb_scheduler(lamb_schedule, 1.0, 0.0, n_iters)
     cnt = 0
-    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-    for idx in range(len(iis)):
-        i = iis[idx]
+    time_records, epoch_running_time, total_running_time, stepaverage = [0.0], 0.0, 0.0, 0.0
+    num_steps_in_epoch = np.floor(n/b)
+    for idx in range(n_iters):
+        # i = iis[idx]
+        minib = np.random.randint(low=0, high=n, size=(b,))
         if lamb_schedule is not False:
             if lamb_schedule == "ada":
                 lamb = s
             else: 
                 lamb = lambts[idx] 
         start_time = time.time()        
-        # ith data point
-        di = data[i, :] 
-        # loss of (i-1)-th data point
-        loss_i = loss.val(label[i], di @ x)  + reg * regularizer.val(x)   
-        # gradient of (i-1)-th data point
-        lprime = loss.prime(label[i], di @ x)
-        gi = lprime * di + reg * regularizer.prime(x)
+        # loss of (i-1)-th batch 
+        loss_i = loss_minibatch(loss, label, data, x, reg, regularizer, minib)
+        # gradient of (i-1)-th batch
+        gi = grad_minibatch(loss, label, data, x, reg, regularizer, minib)
         # --------computing the stepsize -------
         stepdam = np.maximum(0, loss_i-s+delta*lamb)/ (delta+ np.dot(gi, gi))
         spsstep = loss_i /np.dot(gi, gi)
-        stepsize = np.minimum( stepdam, spsstep) 
+        stepsize = np.minimum(stepdam, spsstep) 
         stepsize = stepsize[0]
+        stepaverage += stepsize/num_steps_in_epoch
         # --------updating the slack -------
         s  =   np.maximum(0, s-lamb* delta + delta *stepdam)
-        
         ## Iterative averaging form of momentum
         z += -stepsize*lr*gi 
         x = beta*x +(1.0-beta)*z  # This adds on momentum to x     
         # ----------------------------------------------------------
         epoch_running_time += time.time() - start_time
-        if (idx + 1) % n == 0:
+        if (idx + 1) % num_steps_in_epoch == 0:
             cnt += 1
-            stepsize_records.append(stepsize)
+            stepsize_records.append(stepaverage)
+            stepaverage=0
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
             
     return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
-def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, sps_max=100, beta=0.0):
+def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, sps_max=100, beta=0.0, b=100):
     """
     Stochastic Polyak Stepsize. Note: We are using an epsilon 
     added to the denominator together with max-capped step for stability.
@@ -511,31 +633,32 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
     x = x_0.copy()
     z = x_0.copy()
     # init loss
-    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    loss_x0 =loss_minibatch(loss, label, data, x, reg, regularizer)
     # init grad
-    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    g = grad_minibatch(loss, label, data, x, reg, regularizer)
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     stepsize_records = []
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
-
-    iis = np.random.randint(0, n, n * epoch + 1)
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
-#    total_start_time = time.time()
-    for idx in range(len(iis)):
-        i = iis[idx]
-
+    stepaverage =0
+    num_steps_in_epoch = np.floor(n/b)
+    n_iters = int(np.ceil(n * epoch/b))
+    for idx in range(n_iters):
+        # i = iis[idx]
+        minib = np.random.randint(low=0, high=n, size=(b,))
         start_time = time.time()
-        # loss of (i-1)-th data point
-        loss_i = loss.val(label[i], data[i, :] @ x)  + reg * regularizer.val(x)   
-        # gradient of (i-1)-th data point
-        grad_i = loss.prime(label[i], data[i, :] @ x) * data[i, :] + reg * regularizer.prime(x)
+        # loss of (i-1)-th batch 
+        loss_i = loss_minibatch(loss, label, data, x, reg, regularizer, minib)
+        # gradient of (i-1)-th batch
+        grad_i = grad_minibatch(loss, label, data, x, reg, regularizer, minib)
         # update
         sps_step = ((lr*loss_i)/(grad_i @ grad_i +eps))
         stepsize = np.minimum(sps_step,  sps_max)
-
+        stepaverage += stepsize/num_steps_in_epoch
         z += -stepsize * grad_i 
         x = beta*x +(1-beta)*z
         # direction = -stepsize * grad_i + beta*(x-z) # Heavy ball form of  momentum 
@@ -543,18 +666,20 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
         # x += direction
         epoch_running_time += time.time() - start_time
 
-        if (idx + 1) % n == 0:
+        if (idx + 1) % num_steps_in_epoch == 0:
             cnt += 1
-            stepsize_records.append(stepsize)
+            stepsize_records.append(stepaverage)
+            stepaverage=0
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 print("SPS reaches the tolerance: " + str(tol))
                 return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
  
     return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+
 
 
 def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, beta=0.0):
@@ -568,7 +693,8 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
     loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
@@ -610,7 +736,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
             cnt += 1
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 print("SPS2 reaches the tolerance: " + str(tol))
@@ -634,7 +760,8 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
     loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     # Rescale stepsize for iterate averaging momentum
     lr = lr*(1+beta/(1-beta))
@@ -679,7 +806,7 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
             cnt += 1
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 print("SPS2slack reaches the tolerance: " + str(tol))
@@ -704,7 +831,8 @@ def taps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, tau=0.0,
     loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     # acc_records =[0.0]
     # Targets for the loss values
@@ -749,7 +877,7 @@ def taps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, tau=0.0,
             cnt += 1
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
@@ -768,7 +896,8 @@ def sag(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
     loss_x0 = np.mean(loss.val(label, data @ x_0), axis=0) + reg * regularizer.val(x_0)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     # Old gradients
     gradient_memory = np.zeros((n, d))
@@ -803,7 +932,7 @@ def sag(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
             cnt += 1
             update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)   
+                             total_running_time, epoch_running_time, verbose, normg0)   
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
@@ -830,7 +959,8 @@ def svrg(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=
     loss_x0 = np.mean(loss.val(label, data @ x_0), axis=0) + reg * regularizer.val(x_0)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records, time_records, total_running_time = [np.sqrt(g @ g)], [0.0], 0.0
+    normg0 = np.sqrt(g @ g)
+    norm_records, time_records, total_running_time = [normg0], [0.0], 0.0
     loss_records = [1.0]
     effective_pass = 0
     for idx in range(max_effective_pass):
@@ -844,7 +974,7 @@ def svrg(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=
 
         update_records_and_print(effective_pass, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
         if tol is not None and norm_records[-1] <= tol:
             return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
@@ -863,7 +993,7 @@ def svrg(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=
         effective_pass += 1    
         update_records_and_print(effective_pass, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
         # effective_pass += 1
         # g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
         # norm_records.append(np.sqrt(g @ g))
@@ -895,7 +1025,8 @@ def snm(loss, data, label, reg, epoch, x_0, tol=None, verbose=1):
     loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * (0.5)*(x@x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * x
-    norm_records = [np.sqrt(g @ g)]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     memory_gamma = data @ x
     memory_alpha, memory_beta = loss.prime(label, memory_gamma), loss.dprime(label, memory_gamma)
@@ -931,9 +1062,9 @@ def snm(loss, data, label, reg, epoch, x_0, tol=None, verbose=1):
 
         if (idx + 1) % n == 0:
             cnt += 1
-            update_records_and_print(cnt, loss, loss_x0, lambda x: 0.5*x@x, data, label, lr, reg, epoch, 
+            update_records_and_print(cnt, loss, loss_x0, lambda x: 0.5*x@x, data, label, 0.0, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
                 return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
@@ -961,7 +1092,8 @@ def gd(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1)
     loss_x0 = np.mean(loss.val(label, data @ x_0), axis=0) + reg * regularizer.val(x_0)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
     cnt = 0
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
@@ -977,7 +1109,7 @@ def gd(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1)
         # evaluate
         update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
         if tol is not None and norm_records[-1] <= tol:
             return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 
@@ -994,7 +1126,8 @@ def newton(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbos
     loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
     # init grad
     g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
-    norm_records = [np.sqrt(g @ g)]
+    normg0 = np.sqrt(g @ g)
+    norm_records = [normg0]
     loss_records = [1.0]
 
     time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
@@ -1013,7 +1146,7 @@ def newton(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbos
         # evaluate
         update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
                              x, norm_records, loss_records, time_records, 
-                             total_running_time, epoch_running_time, verbose)
+                             total_running_time, epoch_running_time, verbose, normg0)
         if tol is not None and norm_records[-1] <= tol:
             return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
 

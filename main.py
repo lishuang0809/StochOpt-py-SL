@@ -4,9 +4,10 @@ import logging
 import time
 import numpy as np
 import load_data
-from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack, spsdam, spsL1
+from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack, spsL2, spsL2a, spsL1
 import utils
 import pickle
+import scipy
 
 
 # Press the green button in the gutter to run the script.
@@ -15,8 +16,8 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', action='store', dest='name',
                         help="name of setup")
-    parser.add_argument('--type', action='store', dest='type', type=int, default=0,
-                        help="type of problem, 0 means classification and 1 means regression.")
+    parser.add_argument('--type', action='store', dest='type', type=int, default=1,
+                        help="type of problem, 1 means classification and 2 means regression.")
     parser.add_argument('--dataset', action='store', dest='data_set',
                         help="data set name")
     parser.add_argument('--data_path', action='store', dest='data_path',
@@ -24,22 +25,25 @@ def get_args():
     parser.add_argument('--result_folder', action='store', dest='folder',
                         help="folder path to store experiments results")
     parser.add_argument('--log_file', default='log.txt')
-    parser.add_argument('--n_repetition', action='store', type=int, dest='n_rounds', default=10,
+    parser.add_argument('--n_repetition', action='store', type=int, dest='n_repetition', default=10,
                         help="number of repetitions run for algorithm")
     parser.add_argument('--epochs', action='store', type=int, dest='epochs', default=100)
     parser.add_argument('--reg_power_order', action='store', dest='reg_power_order', type=float, default=1.0,
                         help="can be chosen in 1,2,3. 1 means reg=1/sqrt{n}; 2 means 1/n; 3 means 1/n^2.")
     parser.add_argument('--loss', default="L2", help="loss function")
     parser.add_argument('--regularizer', default="L2", help="regularizer type")
-    parser.add_argument('--scale_features', action='store', type=float, dest='scale_features', default=True)
+    parser.add_argument('--scale_features', action='store', type=bool, dest='scale_features', default=True)
     parser.add_argument('--reg', action='store', type=float, dest='reg', default=None)
     parser.add_argument('--lamb', action='store', type=float, dest='lamb', default=None)
     parser.add_argument('--lamb_schedule', action='store', default=False, dest='lamb_schedule',
                         help="name of the lamb scheduling")
     parser.add_argument('--delta', action='store', type=float, dest='delta', default=None)
     parser.add_argument("--lr", action='store', type=float, dest='lr', default=1.0)
-    parser.add_argument("--beta", action='store', type=float, dest='beta', default=0.0)
+    parser.add_argument("--beta", action='store', type=float, dest='beta', default=None)
+    parser.add_argument("--b", action='store', type=int, dest='b', default=256, help ="minibatch size")
     parser.add_argument("--tol", action='store', type=float, dest='tol', default=None)
+    parser.add_argument('--max_loss', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_san', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sana', default=False,
@@ -60,11 +64,15 @@ def get_args():
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sps', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_alig', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))                        
     parser.add_argument('--run_sps2', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sps2slack', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
-    parser.add_argument('--run_spsdam', default=False,
+    parser.add_argument('--run_spsL2', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_spsL2a', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_spsL1', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
@@ -120,13 +128,22 @@ def build_problem(opt):
 
     return folder_path, criterion, penalty, reg, X, y 
 
+def set_minibatch_size(n,b):
+    r'''Takes number of data points, and a given minibatch size b, 
+    check if b is possible and sets alternative if not possible'''
+    if b> n/5:
+        b = np.ceil(n/5)
+    return b
+
 def run(opt, folder_path, criterion, penalty, reg, X, y):
     n, d = X.shape
+    opt.b = int(set_minibatch_size(n,opt.b)) # set minibatch size
+    # print("minibatch ", opt.b, " from ",n)
     logging.info("Number of data points: {:d}; Number of features: {:d}".format(n, d))
     # logging.info("Number of data points: {:d}; Number of features: {:d}".format(n, d))
 
     epochs = opt.epochs
-    n_rounds = opt.n_rounds
+    n_repetition = opt.n_repetition
     x_0 = np.zeros(d)  # np.random.randn(d)
     s_0 = np.zeros(1)
 
@@ -155,7 +172,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": svrg2_lr, "reg": reg, "dist": dist, "epoch": epochs,
                   "x_0": x_0.copy(), "regularizer": penalty, "tol": opt.tol}
         algo_name = "SVRG2"
-        output_dict = utils.run_algorithm(algo_name=algo_name, algo=svrg2, algo_kwargs=kwargs, n_repeat=n_rounds)
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=svrg2, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
     else:
         algo_name = "SVRG2"
@@ -176,7 +193,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": opt.lr, "reg": reg, "dist": dist, "epoch": epochs,
                   "x_0": x_0.copy(), "regularizer": penalty, "tol": opt.tol}
         algo_name = "SAN"
-        output_dict = utils.run_algorithm(algo_name=algo_name, algo=san, algo_kwargs=kwargs, n_repeat=n_rounds)
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=san, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
     else:
         algo_name = "SAN"
@@ -190,7 +207,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                   "x_0": x_0.copy(), "regularizer": penalty, "tol": opt.tol}
         algo_name = "SANA"          
         output_dict = utils.run_algorithm(algo_name="SANA", algo=sana,
-                                                   algo_kwargs=kwargs, n_repeat=n_rounds)
+                                                   algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
     else:
         algo_name = "SANA" 
@@ -203,7 +220,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "reg": reg, "epoch": epochs,
                   "x_0": x_0.copy(), "tol": opt.tol}
         algo_name ="VSN"
-        output_dict = utils.run_algorithm(algo_name=algo_name, algo=vsn, algo_kwargs=kwargs, n_repeat=n_rounds)
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=vsn, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
     else:
         algo_name = "VSN" 
@@ -217,7 +234,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "reg": reg, "epoch": epochs,
                   "x_0": x_0.copy(), "tol": opt.tol}
         output_dict = utils.run_algorithm(
-            algo_name="SNM", algo=snm, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name="SNM", algo=snm, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries("SNM", output_dict)
     else:
         grad_iter, loss_iter, grad_time = utils.load(folder_path, "SNM")
@@ -237,7 +254,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": gd_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, "tol": opt.tol}
         output_dict = utils.run_algorithm(
-            algo_name="GD", algo=gd, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name="GD", algo=gd, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries("GD", output_dict)
 
     if opt.run_newton:
@@ -246,7 +263,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": newton_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, "tol": opt.tol}
         output_dict = utils.run_algorithm(
-            algo_name="Newton", algo=newton, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name="Newton", algo=newton, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries("Newton", output_dict)
     else:
         grad_iter, loss_iter, grad_time = utils.load(folder_path, "Newton")
@@ -262,9 +279,12 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         else:
             lr_max = 1.0/(1.0*L_max)
 
-        lrs = lr_max*(1./np.arange(1, n * epochs + 1))
-        if opt.beta == 0.0:
-            beta = 0.0
+        # lrs = lr_max*(1./np.arange(1, n * epochs + 1)) # Decreasing learning rate
+        n_iters = int(np.ceil(n * epochs/opt.b))
+        lrs = 0.25*lr_max*np.ones(n_iters) # Decreasing learning rate
+    
+        if opt.beta is None:
+            beta = 0.9
             algo_name = "SGD" 
         else:
             beta = opt.beta
@@ -272,21 +292,18 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         logging.info("Learning rate max used for SGD method: {:f}".format(lr_max))
         kwargs = {"loss": criterion, "data": X, "label": y, "lrs": lrs, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol, "beta": beta}
+                  "tol": opt.tol, "beta": beta, "b": opt.b}
 
-        output_dict = utils.run_algorithm(algo_name=algo_name, algo=sgd, algo_kwargs=kwargs, n_repeat=n_rounds)
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=sgd, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
 
     if opt.run_sps:
         np.random.seed(0)
-        ## Clever L_max used in MOTAPS paper
-        # L_max = utils.compute_L_max(X, reg, opt.loss,opt.regularizer)
-        # sps_max = 4.0/L_max
-        sps_max = 100.0 # Nico suggested 10 or 100 or larger. 
-        sps_lr = 1.0
-        eps = 0.01
-        if opt.beta == 0.0:
-            beta = 0.0
+        sps_max = 10.0 # Nico suggested 10 or 100. But 100 was too large for convex
+        sps_lr = 0.5
+        eps = 0.000000001
+        if opt.beta is None:
+            beta = 0.5
             algo_name = "SP"
         else:
             beta = opt.beta
@@ -294,16 +311,35 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         logging.info("Learning rate used for SP method: {:f}".format(sps_lr))
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol, "eps": eps, "sps_max": sps_max, "beta": beta}
+                  "tol": opt.tol, "eps": eps, "sps_max": sps_max, "beta": beta, "b" : opt.b}
         # fix
-        output_dict = utils.run_algorithm(algo_name=algo_name, algo=sps, algo_kwargs=kwargs, n_repeat=n_rounds)
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=sps, algo_kwargs=kwargs, n_repeat=n_repetition)
+        collect_save_dictionaries(algo_name, output_dict)
+
+    if opt.run_alig:
+        np.random.seed(0)
+        sps_max = 0.1 # Taken from ALI-G code
+        sps_lr = 1.0
+        eps = 0.00001
+        if opt.beta is None:
+            beta = 0.9   # Note on Ali-g note on momentum paper
+            algo_name = "ALIG"
+        else:
+            beta = opt.beta
+            algo_name = "ALIG" + str(beta)
+        logging.info("Learning rate used for ALIG method: {:f}".format(sps_lr))
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
+                  "tol": opt.tol, "eps": eps, "sps_max": sps_max, "beta": beta, "b" : opt.b}
+        # fix
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=sps, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
 
     if opt.run_sps2:
         np.random.seed(0)
         sps2_lr =1.0
         eps=0.01
-        if opt.beta == 0.0:
+        if opt.beta is None:
             beta = 0.0
             algo_name = "SP2"
         else:
@@ -313,7 +349,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
                   "tol": opt.tol, "eps": eps,  "beta": beta}
         output_dict = utils.run_algorithm(
-            algo_name=algo_name, algo=sps2, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name=algo_name, algo=sps2, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
     
     if opt.run_sps2slack:
@@ -324,7 +360,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
             lamb = 0.0
         else:
             lamb = opt.lamb
-        if opt.beta == 0.0:
+        if opt.beta is None:
             beta = 0.0
             algo_name = "SP2slack"
         else:
@@ -334,32 +370,61 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
                   "tol": opt.tol, "lamb": lamb,  "beta": beta}
         output_dict = utils.run_algorithm(
-            algo_name=algo_name, algo=sps2slack, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name=algo_name, algo=sps2slack, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
 
-    if opt.run_spsdam:
+    if opt.run_spsL2:
         np.random.seed(0)
-        spsdam_lr =1.0
+        spsL2_lr =1.0
         if opt.lamb is None:
-            lamb = 0.98
-            # lamb = 10000
+            lamb = 0.3# 0.98, 0.95, 0.3 phishing
         else:
             lamb = opt.lamb
-        if opt.beta == 0.0:
-            beta = 0.0
-            algo_name = "SPSdam"
+        if opt.beta is None:
+            beta = 0.5
+            algo_name = "SPSL2"
         else:
             beta = opt.beta
-            algo_name = "SPSdamM" + str(beta)
+            algo_name = "SPSL2M" + str(beta)  
         if opt.lamb_schedule is not False:
             algo_name = algo_name + opt.lamb_schedule
         else: 
             algo_name = algo_name + "-l-" + str(lamb)
 
-        kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsdam_lr, "reg": reg,
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL2_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol,  "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "beta": beta}
-        output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsdam, algo_kwargs=kwargs, n_repeat=n_rounds)
+                  "tol": opt.tol,  "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "beta": beta, "b" : opt.b}
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL2, algo_kwargs=kwargs, n_repeat=n_repetition)
+        collect_save_dictionaries(algo_name, output_dict)
+        # algo_name="SPSL2" + "-l-" + str(lamb)
+        # kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL2_lr, "reg": reg,
+        #           "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
+        #           "tol": opt.tol,  "lamb": lamb,  "beta": beta, "b" : opt.b}  # Running again without scheduler
+        # output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL2, algo_kwargs=kwargs, n_repeat=n_repetition)
+        # collect_save_dictionaries(algo_name, output_dict)
+
+    if opt.run_spsL2a:
+        np.random.seed(0)
+        spsL2_lr =1.0
+        if opt.lamb is None:
+            lamb = 1.0# 0.98, 0.95, 0.3 phishing
+        else:
+            lamb = opt.lamb
+        algo_name = "SPSL2a"
+        if opt.beta is None:
+            beta = 0.8
+        else:
+            beta = opt.beta
+            algo_name = algo_name +"M" + str(beta)  
+        if opt.lamb_schedule is not False:
+            algo_name = algo_name + opt.lamb_schedule
+        else: 
+            algo_name = algo_name + "-l-" + str(lamb)
+
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL2_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
+                  "tol": opt.tol,  "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "beta": beta, "b" : opt.b}
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL2a, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
 
     if opt.run_spsL1:
@@ -370,11 +435,12 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         else:
             delta = opt.delta
         if opt.lamb is None:
-            lamb = 1.0
+            lamb = 0.05#1.00 #1.0  0.05  # try 0.80  for phishing 0.05
         else:
             lamb = opt.lamb
-        if opt.beta == 0.0:
-            beta = 0.0
+        # import pdb; pdb.set_trace()
+        if opt.beta is None:
+            beta = 0.8
             algo_name = "SPSL1"
         else:
             beta = opt.beta
@@ -385,15 +451,20 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
             algo_name = algo_name + "-l-" + str(lamb)
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL1_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "delta": delta, "beta": beta}
-        output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL1, algo_kwargs=kwargs, n_repeat=n_rounds)
+                  "tol": opt.tol, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "delta": delta, "beta": beta, "b" : opt.b}
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL1, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
-
+        # algo_name="SPSL1" + "-l-" + str(lamb)
+        # kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL1_lr, "reg": reg,
+        #           "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
+        #           "tol": opt.tol, "lamb": lamb,  "delta": delta, "beta": beta, "b" : opt.b} # Running again without scheduler
+        # output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL1, algo_kwargs=kwargs, n_repeat=n_repetition)
+        # collect_save_dictionaries(algo_name, output_dict)
 
     if opt.run_taps:
         np.random.seed(0)
         taps_lr = 1.0
-        if opt.beta == 0.0:
+        if opt.beta is None:
             beta = 0.0
             algo_name = "TAPS"
         else:
@@ -415,7 +486,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty,
                    "tol": opt.tol, "tau": tau, "tau_lr": 0.0, "beta": beta}
         output_dict = utils.run_algorithm(
-            algo_name=algo_name, algo=taps, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name=algo_name, algo=taps, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
 
     if opt.run_motaps:
@@ -432,7 +503,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
             motaps_lr = gamma_theo
         else:   
             motaps_lr = opt.motaps_lr
-        if opt.beta == 0.0:
+        if opt.beta is None:
             beta = 0.0
             algo_name = "MOTAPS"
         else:
@@ -447,7 +518,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty,
                    "tol": opt.tol, "tau": tau, "tau_lr": tau_lr, "beta": beta}
         output_dict = utils.run_algorithm(
-            algo_name=algo_name, algo=taps, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name=algo_name, algo=taps, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
 
 
@@ -460,9 +531,9 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         #  beta1 =0.9, beta2 =0.999, eps = 10**(-8.0), verbose = False
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
-                  "tol": opt.tol}
+                  "tol": opt.tol, "b" : opt.b}
         algo_name = "ADAM"
-        output_dict= utils.run_algorithm(algo_name=algo_name, algo=adam, algo_kwargs=kwargs, n_repeat=n_rounds)
+        output_dict= utils.run_algorithm(algo_name=algo_name, algo=adam, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
 
     if opt.run_sag:
@@ -479,7 +550,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": sag_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, "tol": opt.tol}
         output_dict = utils.run_algorithm(
-            algo_name="SAG", algo=sag, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name="SAG", algo=sag, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries("SAG", output_dict)
     else:
         grad_iter, loss_iter, grad_time = utils.load(folder_path, "SAG")
@@ -502,7 +573,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": svrg_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, "tol": opt.tol}
         output_dict = utils.run_algorithm(
-             algo_name="SVRG", algo=svrg, algo_kwargs=kwargs, n_repeat=n_rounds)
+             algo_name="SVRG", algo=svrg, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
     else:
         grad_iter, loss_iter, grad_time = utils.load(folder_path, "SVRG")
@@ -519,13 +590,14 @@ if __name__ == '__main__':
     dict_grad_iter, dict_loss_iter, dict_time_iter, dict_stepsize_iter  = run(opt, folder_path, criterion, penalty, reg, X, y)
 
     #Plot the training loss and gradient convergence
-    utils.plot_iter(result_dict=dict_grad_iter, problem=opt.data_set, title = opt.name + "-grad" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, yaxislabel=r"$\| \nabla f \|$")
-    utils.plot_iter(result_dict=dict_loss_iter, problem=opt.data_set, title = opt.name + "-loss" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path)
+    utils.plot_iter(result_dict=dict_grad_iter, problem=opt.data_set, title = opt.name + "-grad" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, tol=opt.tol, yaxislabel=r"$\| \nabla f \|^2$")
+    utils.plot_iter(result_dict=dict_loss_iter, problem=opt.data_set, title = opt.name + "-loss" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, tol=opt.tol, yaxislabel=r"$f(w^t)/f(w^0)$")
+    # utils.plot_iter(result_dict=dict_loss_iter, problem=opt.data_set, title = opt.name + "-max-loss" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, yaxislabel=r"$\max_i f_i(w^t)$")
     utils.plot_iter(result_dict=dict_stepsize_iter, problem=opt.data_set, title = opt.name + "-stepsize" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, yaxislabel="step sizes")
     # Some code Shuang wrote
-    dict_time_iter_sum = {} 
-    for key in dict_time_iter: 
-        dict_time_iter_sum[key] = sum(sum(np.array(dict_time_iter[key]))) 
-    # Some code Shuang wrote
-    with open(os.path.join(folder_path, 'dict_time_iter_sum_'+'M'+ str(opt.beta)+'-reg'+ str(reg)), 'wb') as fp:
-         pickle.dump(dict_time_iter_sum, fp)
+    # dict_time_iter_sum = {} 
+    # for key in dict_time_iter: 
+    #     dict_time_iter_sum[key] = sum(sum(np.array(dict_time_iter[key]))) 
+    # # Some code Shuang wrote
+    # with open(os.path.join(folder_path, 'dict_time_iter_sum_'+'M'+ str(opt.beta)+'-reg'+ str(reg)), 'wb') as fp:
+    #      pickle.dump(dict_time_iter_sum, fp)
