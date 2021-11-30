@@ -106,7 +106,8 @@ def san(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, verbose=1
             epoch_running_time = 0.0
             # print(str(cnt)+"-th Data Pass: ", norm_records[-1])
             if tol is not None and norm_records[-1] <= tol:
-                return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
+                break
+                # return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records}
     return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records} #loss_records, 
 
 

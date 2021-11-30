@@ -16,7 +16,7 @@
 # "colon-cancer" "mushrooms" "duke" "news20.binary" "gisette-scale" "cod-rna.t" "phishing"
 python main.py --type 1 --dataset 'phishing' --data_path './datasets/phishing' \
                --name 'phishing' --result_folder 'san' --log_file 'log1.txt' --scale_features False \
-               --epochs 50 --n_repetition 5 --reg_power_order 1.0 --tol 0.0000001 \
+               --epochs 100 --n_repetition 5 --reg_power_order 1.0 --tol 0.0000001 \
                --loss "Logistic" --regularizer 'L2'  \
                --run_sgd True --run_san True --run_svrg True \
-               --run_adam True --run_sag True --b 1
+               --run_adam True --run_sag True --b 1 --lr 0.1
