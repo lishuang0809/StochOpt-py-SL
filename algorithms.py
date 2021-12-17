@@ -625,6 +625,64 @@ def spsL1(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, delta,
             
     return {'x' : x, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
 
+def spsL1eq(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, lamb_schedule=False, tol=None,  verbose=1):
+    r"""The L1 slack SPS method with equality (SPSL1eq).
+    Based on the iteration
+         w',  s' = argmin_{w, s} 0.5*||w - w^t||^2  + 0.5*(s-s^t)^2 + lambda*s
+                   subject to value + <grad, w - w^t> = s.
+      To which the solution is
+        ...
+      """
+    n, d = data.shape
+    w = x_0.copy() # (d,)
+    s = loss.val(label, data @ w) # (n,) we initialize it with function values at w0
+    # init loss
+    loss_x0 =loss_minibatch(loss, label, data, w, reg, regularizer)
+    # init grad
+    g = grad_minibatch(loss, label, data, w, reg, regularizer)
+    normg0 = np.sqrt(g @ g)
+    slack0 = np.min(s)
+    norm_records = [normg0]
+    slack_records = [slack0]
+    loss_records = [1.0]
+    stepsize_records = []
+    cnt = 0
+    time_records, epoch_running_time, total_running_time, stepaverage = [0.0], 0.0, 0.0, 0.0
+    num_steps_in_epoch = n
+    n_iters = n * epoch
+    if lamb_schedule is not False:
+        lambts = lamb_scheduler(lamb_schedule, 1.0, 0.0, n_iters)
+    for idx in range(n_iters):
+        minib = np.random.randint(low=0, high=n, size=(1,))
+        if lamb_schedule is not False:
+            lamb = lambts[idx] 
+        start_time = time.time()        
+        # loss of (i-1)-th batch 
+        loss_i = loss_minibatch(loss, label, data, w, reg, regularizer, minib)
+        # gradient of (i-1)-th batch
+        gi = grad_minibatch(loss, label, data, w, reg, regularizer, minib)
+        normgi2 = np.dot(gi, gi)
+        # -------- computing the new iterates
+        tau = 1/(1+normgi2)
+        s[minib] = tau*loss_i + (1-tau)*(s[minib] - lamb)
+        stepsize = (loss_i - s[minib])/normgi2
+        w = w - stepsize*gi
+        stepaverage += stepsize/num_steps_in_epoch
+        # ----------------------------------------------------------
+        epoch_running_time += time.time() - start_time
+        if (idx + 1) % num_steps_in_epoch == 0:
+            cnt += 1
+            stepsize_records.append(stepaverage)
+            stepaverage=0
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch, 
+                             w, norm_records, loss_records, time_records, 
+                             total_running_time, epoch_running_time, verbose, normg0)
+            slack_records.append(np.min(s))
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                return {'x' : w, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records }
+    return {'x' : w, 'norm_records' : norm_records, 'loss_records' : loss_records, 'time_records' : time_records, 'stepsize_records' : stepsize_records, 'slack_records' : slack_records }
+
 def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, sps_max=100, beta=0.0, b=100):
     """
     Stochastic Polyak Stepsize. Note: We are using an epsilon 

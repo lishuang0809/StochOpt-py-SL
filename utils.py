@@ -38,6 +38,8 @@ def plot_general(result_dict, problem, title, save_path, threshold=False,tol=Fal
         markevery = 1
         if newlength > 20:
             markevery = int(np.floor(newlength/15))
+        if np.min(val_avg) <= 0: # this to detect negative values and prevent an error to be thrown
+            logplot = False
         if logplot:
             plt.semilogy(xticks_p, val_avg, marker, markevery=markevery, label=algo_name, lw=2)
         else:
@@ -65,7 +67,7 @@ def plot_iter(result_dict, problem, title, save_path, threshold=False, tol=False
  
 def run_algorithm(algo_name, algo, algo_kwargs, n_repeat):
     logging.info("------START {}------".format(algo_name))
-    grad_iter, loss_iter, grad_time, stepsizes = [], [],  [], []
+    grad_iter, loss_iter, grad_time, stepsizes, slack = [], [], [], [], []
     is_stepsize_key = False
     for i in range(n_repeat):
         logging.info("{}-th repetition:".format(i + 1))
@@ -76,9 +78,14 @@ def run_algorithm(algo_name, algo, algo_kwargs, n_repeat):
         if 'stepsize_records' in output_dict:
             stepsizes.append(output_dict['stepsize_records'])
             is_stepsize_key = True
+        if 'slack_records' in output_dict:
+            slack.append(output_dict['slack_records'])
+            is_slack_key = True
     logging.info("------END {}------".format(algo_name))
     # print("MAE: {}".format(np.mean(np.abs(algo_kwargs['data']@final_w - algo_kwargs['label']))))
-    if is_stepsize_key:
+    if is_stepsize_key and is_slack_key:
+        return { "grad_iter" : grad_iter, "loss_iter" : loss_iter, "grad_time" : grad_time, "stepsizes" : stepsizes, "slack" : slack}
+    elif is_stepsize_key:
         return { "grad_iter" : grad_iter, "loss_iter" : loss_iter, "grad_time" : grad_time, "stepsizes" : stepsizes}
     else:
         return { "grad_iter" : grad_iter, "loss_iter" : loss_iter, "grad_time" : grad_time}

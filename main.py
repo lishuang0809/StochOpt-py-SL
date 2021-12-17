@@ -4,7 +4,7 @@ import logging
 import time
 import numpy as np
 import load_data
-from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack, spsL2, spsL2a, spsL1
+from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack, spsL2, spsL2a, spsL1, spsL1eq
 import utils
 import pickle
 import scipy
@@ -76,6 +76,8 @@ def get_args():
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_spsL1', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_spsL1eq', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sgd', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_adam', default=False,
@@ -146,11 +148,13 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
     n_repetition = opt.n_repetition
     x_0 = np.zeros(d)  # np.random.randn(d)
     s_0 = np.zeros(1)
+    S_0 = np.zeros(n) # one slack per data
 
     dict_grad_iter = {}
     dict_loss_iter = {}
     dict_time_iter = {}
     dict_stepsize_iter = {}
+    dict_slack_iter = {}
 
     
     def collect_save_dictionaries(algo_name, output_dict):
@@ -160,6 +164,8 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         dict_time_iter[algo_name] = output_dict['grad_time']
         if "stepsizes" in output_dict:
             dict_stepsize_iter[algo_name] = output_dict['stepsizes']
+        if "slack" in output_dict:
+            dict_slack_iter[algo_name] = output_dict['slack']
             
         utils.save(folder_path, algo_name, dict_grad_iter, dict_loss_iter, dict_time_iter)
         # utils.save(os.path.join(folder_path,  algo_name + '_grad_iter'), dict_grad_iter[algo_name],
@@ -454,12 +460,27 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                   "tol": opt.tol, "lamb": lamb, "lamb_schedule": opt.lamb_schedule, "delta": delta, "beta": beta, "b" : opt.b}
         output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL1, algo_kwargs=kwargs, n_repeat=n_repetition)
         collect_save_dictionaries(algo_name, output_dict)
-        # algo_name="SPSL1" + "-l-" + str(lamb)
-        # kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL1_lr, "reg": reg,
-        #           "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
-        #           "tol": opt.tol, "lamb": lamb,  "delta": delta, "beta": beta, "b" : opt.b} # Running again without scheduler
-        # output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL1, algo_kwargs=kwargs, n_repeat=n_repetition)
-        # collect_save_dictionaries(algo_name, output_dict)
+
+    if opt.run_spsL1eq:
+        np.random.seed(0)
+        spsL1eq_lr = opt.lr
+        algo_name = "spsL1eq" 
+        if opt.lamb is None:
+            lamb = 1#1.00 #1.0  0.05  # try 0.80  for phishing 0.05
+        else:
+            lamb = opt.lamb
+        if opt.lamb_schedule is not False:
+            algo_name = algo_name + opt.lamb_schedule
+        else: 
+            algo_name = algo_name + "-l-" + str(lamb)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": spsL1eq_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": S_0.copy(), "regularizer": penalty, 
+                  "tol": opt.tol, "lamb": lamb, "lamb_schedule": opt.lamb_schedule}
+        output_dict = utils.run_algorithm(algo_name=algo_name, algo=spsL1eq, algo_kwargs=kwargs, n_repeat=n_repetition)
+        collect_save_dictionaries(algo_name, output_dict)
+
+        
+        
 
     if opt.run_taps:
         np.random.seed(0)
@@ -581,19 +602,20 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
             dict_grad_iter["SVRG"] = grad_iter
 
 ## Final return of run()     
-    return dict_grad_iter, dict_loss_iter, dict_time_iter, dict_stepsize_iter #, opt.data_set, opt.name, folder_path
+    return dict_grad_iter, dict_loss_iter, dict_time_iter, dict_stepsize_iter, dict_slack_iter #, opt.data_set, opt.name, folder_path
 
 if __name__ == '__main__': 
 
     opt = get_args()   #get options and parameters from parser
     folder_path, criterion, penalty, reg, X, y  = build_problem(opt)  #build the optimization problem
-    dict_grad_iter, dict_loss_iter, dict_time_iter, dict_stepsize_iter  = run(opt, folder_path, criterion, penalty, reg, X, y)
+    dict_grad_iter, dict_loss_iter, dict_time_iter, dict_stepsize_iter, dict_slack_iter  = run(opt, folder_path, criterion, penalty, reg, X, y)
 
     #Plot the training loss and gradient convergence
     utils.plot_iter(result_dict=dict_grad_iter, problem=opt.data_set, title = opt.name + "-grad" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, tol=opt.tol, yaxislabel=r"$\| \nabla f \|^2$")
     utils.plot_iter(result_dict=dict_loss_iter, problem=opt.data_set, title = opt.name + "-loss" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, tol=opt.tol, yaxislabel=r"$f(w^t)/f(w^0)$")
+    utils.plot_iter(result_dict=dict_slack_iter, problem=opt.data_set, title = opt.name + "-slack" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, tol=opt.tol, yaxislabel=r"$min_i s_i^t$")
     # utils.plot_iter(result_dict=dict_loss_iter, problem=opt.data_set, title = opt.name + "-max-loss" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, yaxislabel=r"$\max_i f_i(w^t)$")
-    utils.plot_iter(result_dict=dict_stepsize_iter, problem=opt.data_set, title = opt.name + "-stepsize" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, yaxislabel="step sizes")
+    #utils.plot_iter(result_dict=dict_stepsize_iter, problem=opt.data_set, title = opt.name + "-stepsize" + "-reg-" + "{:.2e}".format(reg), save_path=folder_path, yaxislabel="step sizes")
     # Some code Shuang wrote
     # dict_time_iter_sum = {} 
     # for key in dict_time_iter: 
