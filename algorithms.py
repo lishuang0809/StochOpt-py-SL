@@ -521,7 +521,7 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
         sps_step = ((lr*loss_i)/(grad_i @ grad_i +eps))
         stepsize = np.minimum(sps_step,  sps_max)
 
-        z += -stepsize * grad_i 
+        z += -0.1 * stepsize * grad_i 
         x = beta*x +(1-beta)*z
         # direction = -stepsize * grad_i + beta*(x-z) # Heavy ball form of  momentum 
         # z = x.copy()
@@ -586,8 +586,8 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
         dir_2nd =  gi -hess_gi*l_div_gnorm
         dir_2nd_norm = dir_2nd@dir_2nd
         ## Iterative averaging form of momentum
-        z += -lr*l_div_gnorm*gi  #The update is applied to z variable because we use the iterative
-        z += -0.5*lr*(l_div_gnorm**2) *(hess_gi@gi/(dir_2nd_norm+eps))*dir_2nd
+        z += -0.1*lr*l_div_gnorm*gi  #The update is applied to z variable because we use the iterative
+        z += -0.1*0.5*lr*(l_div_gnorm**2) *(hess_gi@gi/(dir_2nd_norm+eps))*dir_2nd
         x = beta*x +(1.0-beta)*z  # This adds on momentum 
 
         epoch_running_time += time.time() - start_time

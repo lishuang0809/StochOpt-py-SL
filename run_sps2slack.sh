@@ -45,7 +45,7 @@ do
             NAME="${DATASET[j]}-${betas[r]}"
             python main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
                         --name $NAME --result_folder 'sps2_slack' --log_file "log-${NAME}.txt" \
-                        --epochs 1000 --n_repetition 1 --reg ${regs[s]} --tol 1e-1 --lamb 0.5  \
+                        --epochs 300 --n_repetition 1 --reg ${regs[s]} --tol 5e-2 --lamb 0.5  \
                         --loss "Logistic" --regularizer 'L2'  \
                         --run_sps True --run_sgd True --run_adam True --run_sps2 True --run_sps2slack True  --beta ${betas[r]} 
    #    echo "Finished regularization ${regs[s]}"

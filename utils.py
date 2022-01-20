@@ -5,12 +5,12 @@ import logging
 import pickle
 
 
-def plot_iter(result_dict, problem, title, save_path, threshold=1e-8, gradplot=True, fontsize=30):
+def plot_iter(result_dict, problem, title, save_path, threshold=1e-8, gradplot=True, fontsize=35):
     plt.rc('text', usetex=True)
     plt.rc('font', family='sans-serif')
     plt.figure(figsize=(9, 8), dpi=1200)
 
-    markers = ["^-", "d-", "*-", ">-", "+-", "o-" , "1-", "2-", "3-", "4-", "8-", "s-"]
+    markers = ["^-", "d-", "*-", ">-", "X-", "o-" , "1-", "2-", "3-", "4-", "8-", "s-"]
     for algo_name, marker in zip(result_dict.keys(), markers):
         result = result_dict[algo_name]
         # result is a 2-d list with different length,
@@ -27,17 +27,17 @@ def plot_iter(result_dict, problem, title, save_path, threshold=1e-8, gradplot=T
         # grad_std = np.std(result, axis=0)
         # val_min = np.add(val_avg, -grad_std)
         # val_max = np.add(val_avg, grad_std)
-        plt.semilogy(np.arange(len(val_avg)), val_avg, marker, label=algo_name, lw=2)
+        plt.semilogy(np.arange(len(val_avg)), val_avg, marker, label=algo_name, lw=3, markevery=10, markersize=8)
         plt.fill_between(np.arange(len(val_avg)), val_min, val_max, alpha=0.2)
 
-    plt.tick_params(labelsize=20)
-    plt.legend(fontsize=fontsize)
-    plt.xlabel("Effective Passes", fontsize=25)
+    plt.tick_params(labelsize=35)
+    plt.legend(fontsize=fontsize,loc='lower right') 
+    plt.xlabel("Effective Passes", fontsize=35)
     if gradplot:
-        plt.ylabel(r"$\| \nabla f \|_2$", fontsize=25)
+        plt.ylabel(r"$\| \nabla f \|_2$", fontsize=35)
     else:
-        plt.ylabel(r"$ f(x^k)/f(x^0)$", fontsize=25)    
-    plt.title(title, fontsize=25)
+        plt.ylabel(r"$ f(x^k)/f(x^0)$", fontsize=35)    
+    plt.title(title, fontsize=35)
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     plt.savefig(os.path.join(save_path, title + ".pdf"), bbox_inches='tight', pad_inches=0.01)

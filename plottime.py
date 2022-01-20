@@ -20,15 +20,15 @@ NUM_regs=len(regs)
 NUM_betas=len(betas)
 
 
-markers = ["^-", "d-", "*-", ">-", "+-", "o-" , "1-", "2-", "3-", "4-", "8-", "s-"]
-fs = 20
+markers = ["^-", "d-", "*-", ">-", "X-", "o-" , "1-", "2-", "3-", "4-", "8-", "s-"]
+fs = 22 
 
 for r in range(NUM_betas):   
     beta = betas[r]
-    rtime = np.zeros((NUM_regs, 5))
-    marker = markers[r]
+    rtime = np.zeros((NUM_regs, 5))    
     for s in range(NUM_regs):
-        reg = regs[s]     
+        reg = regs[s]    
+        #marker = markers[s]
         with open(os.path.join('sps2_slack/colon-cancer', 'dict_time_iter_sum_'+'M'+ str(beta)+'-reg'+ "{:.2e}".format(reg)), 'rb') as fp:
             grad_iter = pickle.load(fp) 
             rtime[s,:] = list(grad_iter.values()) 
@@ -36,10 +36,10 @@ for r in range(NUM_betas):
     plt.xlabel("Regularization",fontsize=fs)
     plt.ylabel("Running time",fontsize=fs)
     fig1 = plt.gcf()
-    plt.semilogy(regs, rtime, marker, lw=2)
+    plt.semilogy(regs, rtime, markers[r], lw=2.5, markersize=8)
     plt.rc('xtick', labelsize=fs) 
     plt.rc('ytick', labelsize=fs) 
-    plt.gca().legend(('SGD','SP','SP2','SP2slack','ADAM'))   
+    plt.gca().legend(('SGD','SP','SP2','SP2slack','ADAM'),fontsize=fs-4,loc='upper right')   
     plt.show()
     fig1.savefig(os.path.join('sps2_slack/colon-cancer', "colon-cancer-runtime-M"+str(beta)+".pdf"), bbox_inches='tight', pad_inches=0.01)
     
