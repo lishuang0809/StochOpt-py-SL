@@ -1,6 +1,6 @@
 import numpy as np
 
-# SS EDIT
+# SS EDIT 4/28
 class LogisticLoss:
     @staticmethod
     def val(y, y_hat):
