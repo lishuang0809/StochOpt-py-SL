@@ -13,10 +13,12 @@
 # --lr: float, learning rate for Stochastic Averaging Newton, default: 1.0
 # --run_xx: do we run xx algorithm
 # --run_newton False --run_gd False
-# "colon-cancer" "mushrooms" "duke" "news20.binary" "gisette-scale" "cod-rna.t" "phishing"
-python main.py --type 1 --dataset 'fourclass' --data_path './datasets/fourclass.txt' \
-               --name 'fourclass' --result_folder 'results' --log_file 'log.txt' \
-               --epochs 100 --n_repetition 10 --reg_power_order 1.0 --tol 0.00001  \
-               --loss "Logistic" --regularizer 'L2' --lamb 100 \
-               --run_sgd False --run_spsL1 False --run_spsL1eq True --run_spsL2 False \
-               --run_adam False --run_alig False --run_spsL2a False 
+python main.py --type 1 --dataset 'colon-cancer' --data_path './datasets/colon-cancer' \
+               --name 'colon' --result_folder 'logistic' --log_file 'log1.txt' \
+               --epochs 75 --n_repetition 10 --reg_power_order 1.0 --tol 1e-8  \
+               --loss "Logistic" --regularizer 'L2'  \
+               --run_sag True --run_svrg True --run_sps True --run_sgd True \
+               --run_taps True --run_motaps True 
+
+
+ 

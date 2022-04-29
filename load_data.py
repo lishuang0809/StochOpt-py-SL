@@ -2,9 +2,6 @@ from numpy.random import multivariate_normal, randn
 from scipy.linalg.special_matrices import toeplitz
 import numpy as np
 from sklearn.datasets import load_svmlight_file
-# from scipy.sparse import hstack
-from scipy.sparse import issparse
-from sklearn.preprocessing import scale
 import loss
 import regularizer
 
@@ -24,11 +21,9 @@ def load_problem(X, y, problem_type = "classification",
     elif problem_type != "regression":
         raise Exception("Unknown problem type!")
 
-
     if center_features:
         X = (X - np.mean(X, axis=0)) / (np.std(X, axis=0) + 1e-8)
     if scale_features:
-        # X = scale(X, with_mean=False, copy=False)
         X = X / np.max(np.abs(X), axis=0)
     if bias_term:# adding a column filling with all ones.(bias term)
         X = np.c_[X, np.ones(X.shape[0])]
