@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# --type: int, type of problem, 0 means classification and 1 means regression
+# --type: int, type of problem, 1 means classification and 2 means regression
 # --dataset: str, name of dataset. hint: can be set "artificial"
 # --data_path: str, path to load dataset
 # --result_folder: str, name of folder to store the results
@@ -12,11 +12,11 @@
 # --reg: float, regularization parameter, default-None
 # --lr: float, learning rate for Stochastic Averaging Newton, default: 1.0
 # --run_xx: do we run xx algorithm
-# --run_newton False --run_gd False
+# --run_newton False --run_gd False  --run_alig True
 # "colon-cancer" "mushrooms" "duke" "news20.binary" "gisette-scale" "cod-rna.t" "phishing"
-python main.py --type 1 --dataset 'fourclass' --data_path './datasets/fourclass.txt' \
-               --name 'fourclass' --result_folder 'results' --log_file 'log.txt' \
-               --epochs 100 --n_repetition 10 --reg_power_order 1.0 --tol 0.00001  \
-               --loss "Logistic" --regularizer 'L2' --lamb 100 \
-               --run_sgd False --run_spsL1 False --run_spsL1eq True --run_spsL2 False \
-               --run_adam False --run_alig False --run_spsL2a False 
+python main.py --type 1 --dataset 'phishing' --data_path './datasets/phishing' \
+               --name 'phishing' --result_folder 'san' --log_file 'log1.txt' --scale_features False \
+               --epochs 100 --n_repetition 5 --reg_power_order 1.0 --tol 0.0000001 \
+               --loss "Logistic" --regularizer 'L2'  \
+               --run_sgd True --run_san True --run_svrg True \
+               --run_adam True --run_sag True --b 1 --lr 0.1
