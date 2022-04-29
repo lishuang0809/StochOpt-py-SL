@@ -15,17 +15,17 @@ import pickle
 #regs=np.array([0.001, 0.003, 0.005, 0.007, 0.009])
 #betas=np.array([0.0, 0.3, 0.5, 0.7])
 regs=np.array([0.000, 0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009])
-betas=np.array([0.0, 0.3, 0.5, 0.7])
+betas=np.array([0.0, 0.3])
 NUM_regs=len(regs) 
 NUM_betas=len(betas)
-
+#colon-cancer
 
 markers = ["^-", "d-", "*-", ">-", "X-", "o-" , "1-", "2-", "3-", "4-", "8-", "s-"]
 fs = 22 
 
 for r in range(NUM_betas):   
     beta = betas[r]
-    rtime = np.zeros((NUM_regs, 5))    
+    rtime = np.zeros((NUM_regs, 7))
     for s in range(NUM_regs):
         reg = regs[s]    
         #marker = markers[s]
@@ -39,7 +39,7 @@ for r in range(NUM_betas):
     plt.semilogy(regs, rtime, markers[r], lw=2.5, markersize=8)
     plt.rc('xtick', labelsize=fs) 
     plt.rc('ytick', labelsize=fs) 
-    plt.gca().legend(('SGD','SP','SP2','SP2slack','ADAM'),fontsize=fs-4,loc='upper right')   
+    plt.gca().legend(('SGD','SP','SP2$^+$','SP2L2$^+$','SP2L1$^+$','SP2max$^+$','ADAM'),fontsize=fs-4,loc='upper right')
     plt.show()
     fig1.savefig(os.path.join('sps2_slack/colon-cancer', "colon-cancer-runtime-M"+str(beta)+".pdf"), bbox_inches='tight', pad_inches=0.01)
     

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # --type: int, type of problem, 0 means classification and 1 means regression
 # --dataset: str, name of dataset. hint: can be set "artificial"
@@ -26,10 +26,10 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
-#regs=(0.001 0.003 0.005 0.007 0.009)
+#regs=(0.000 0.001 0.008)
 #betas=(0.0 0.3 0.5 0.7)
 regs=(0.000 0.001 0.002 0.003 0.004 0.005 0.006 0.007 0.008 0.009)
-betas=(0.0 0.3 0.5 0.7)
+betas=(0.0 0.3) # 0.5 0.7
 DATASET=("colon-cancer") #mushrooms duke colon-cancer
 NUM_regs=${#regs[@]} 
 NUM_betas=${#betas[@]}
@@ -45,9 +45,12 @@ do
             NAME="${DATASET[j]}-${betas[r]}"
             python main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
                         --name $NAME --result_folder 'sps2_slack' --log_file "log-${NAME}.txt" \
-                        --epochs 300 --n_repetition 1 --reg ${regs[s]} --tol 5e-2 --lamb 0.5  \
+                        --epochs 200 --n_repetition 1 --reg ${regs[s]} --tol 1e-2 --lamb 0.5  \
                         --loss "Logistic" --regularizer 'L2'  \
-                        --run_sps True --run_sgd True --run_adam True --run_sps2 True --run_sps2slack True  --beta ${betas[r]} 
+                        --run_sps2 True --run_SP2L2p True --run_SP2L1p True --run_SP2maxp True  \
+                        --run_sps True --run_sgd True --run_adam True \
+                        --beta ${betas[r]}
+  # --run_sps True --run_sgd True --run_adam True --run_sps2 True --run_sps2slack True
    #    echo "Finished regularization ${regs[s]}"
         done
         
@@ -61,3 +64,7 @@ done
 
 #python plottime.py --regs ${regs} --betas ${betas}     
 #echo "Finished plotting time"
+
+# colon-cancer: tolerance 5e-2, SP and SP2 stepsize 0.1, max epoch 300
+# mushrooms: tolerance 1e-2, SP and SP2 stepsize 0.05, max epoch 50
+# duke: tolerance 1e-2, SP and SP2 stepsize 0.05, max epoch 50

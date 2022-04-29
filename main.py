@@ -4,7 +4,7 @@ import logging
 import time
 import numpy as np
 import load_data
-from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, sps2slack, spsdam, spsL1
+from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, SP2L2p, spsdam, spsL1, SP2L1p, SP2maxp, SP2max, SP2
 import utils
 import pickle
 
@@ -64,13 +64,23 @@ def get_args():
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sps2', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
-    parser.add_argument('--run_sps2slack', default=False,
+    parser.add_argument('--run_SP2L2p', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_SP2L1p', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_SP2maxp', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_SP2max', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_SP2', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_spsdam', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_spsL1', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sgd', default=False,
+                        type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
+    parser.add_argument('--run_dai', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_adam', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
@@ -322,7 +332,9 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         else:
             lr_max = 1.0/(1.0*L_max)
 
-        lrs = lr_max*(1./np.arange(1, n * epochs + 1))
+          #lrs = 0.5*lr_max*np.ones(n_iters)
+
+        lrs = lr_max*(1./np.sqrt(np.arange(1, n * epochs + 1)))
         if opt.beta == 0.0:
             beta = 0.0
             algo_name = "SGD" 
@@ -375,10 +387,10 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         eps=0.01
         if opt.beta == 0.0:
             beta = 0.0
-            algo_name = "SP2"
+            algo_name = "SP2$^+$"
         else:
             beta = opt.beta
-            algo_name = "SP2M" + str(beta)
+            algo_name = "SP2$^+$M" + str(beta)
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
                   "tol": opt.tol, "eps": eps,  "beta": beta}
@@ -391,7 +403,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                    os.path.join(folder_path, 'sp2_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp2_grad_time'), grad_time)
     
-    if opt.run_sps2slack:
+    if opt.run_SP2L2p:
         np.random.seed(0)
         sps2_lr =1.0
 
@@ -401,21 +413,131 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
             lamb = opt.lamb
         if opt.beta == 0.0:
             beta = 0.0
-            algo_name = "SP2slack"
+            algo_name = "SP2L2$^+$"
         else:
             beta = opt.beta
-            algo_name = "SP2slackM" + str(beta)
+            algo_name = "SP2L2$^+$M" + str(beta)
         kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
                   "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty, 
                   "tol": opt.tol, "lamb": lamb,  "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
-            algo_name=algo_name, algo=sps2slack, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name=algo_name, algo=SP2L2p, algo_kwargs=kwargs, n_repeat=n_rounds)
         dict_grad_iter[algo_name] = grad_iter
         dict_loss_iter[algo_name] = loss_iter
         dict_time_iter[algo_name] = grad_time
-        utils.save(os.path.join(folder_path, 'sp2slack_grad_iter'), grad_iter,
-                   os.path.join(folder_path, 'sp2slack_loss_iter'), loss_iter,
-                   os.path.join(folder_path, 'sp2slack_grad_time'), grad_time)
+        utils.save(os.path.join(folder_path, 'SP2L2p_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'SP2L2p_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'SP2L2p_grad_time'), grad_time)
+
+
+    if opt.run_SP2L1p:
+        np.random.seed(0)
+        sps2_lr =1.0
+
+        if opt.lamb is None:
+            lamb = 0.0
+        else:
+            lamb = opt.lamb
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SP2L1$^+$"
+        else:
+            beta = opt.beta
+            algo_name = "SP2L1$^+$M" + str(beta)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty,
+                  "tol": opt.tol, "lamb": lamb,  "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=SP2L1p, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
+        utils.save(os.path.join(folder_path, 'SP2L1p_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'SP2L1p_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'SP2L1p_grad_time'), grad_time)
+
+
+    if opt.run_SP2maxp:
+        np.random.seed(0)
+        sps2_lr =1.0
+
+        if opt.lamb is None:
+            lamb = 0.0
+        else:
+            lamb = opt.lamb
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SP2max$^+$"
+        else:
+            beta = opt.beta
+            algo_name = "SP2max$^+$M" + str(beta)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty,
+                  "tol": opt.tol, "lamb": lamb,  "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=SP2maxp, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
+        utils.save(os.path.join(folder_path, 'SP2maxp_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'SP2maxp_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'SP2maxp_grad_time'), grad_time)
+
+
+    if opt.run_SP2max:
+        np.random.seed(0)
+        sps2_lr =1.0
+
+        if opt.lamb is None:
+            lamb = 0.0
+        else:
+            lamb = opt.lamb
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SP2max"
+        else:
+            beta = opt.beta
+            algo_name = "SP2maxM" + str(beta)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty,
+                  "tol": opt.tol, "lamb": lamb,  "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=SP2max, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
+        utils.save(os.path.join(folder_path, 'SP2max_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'SP2max_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'SP2max_grad_time'), grad_time)
+
+
+    if opt.run_SP2:
+        np.random.seed(0)
+        sps2_lr =1.0
+
+        if opt.lamb is None:
+            lamb = 0.0
+        else:
+            lamb = opt.lamb
+        if opt.beta == 0.0:
+            beta = 0.0
+            algo_name = "SP2"
+        else:
+            beta = opt.beta
+            algo_name = "SP2M" + str(beta)
+        kwargs = {"loss": criterion, "data": X, "label": y, "lr": sps2_lr, "reg": reg,
+                  "epoch": epochs, "x_0": x_0.copy(),"s_0": s_0.copy(), "regularizer": penalty,
+                  "tol": opt.tol, "lamb": lamb,  "beta": beta}
+        grad_iter, loss_iter, grad_time = utils.run_algorithm(
+            algo_name=algo_name, algo=SP2, algo_kwargs=kwargs, n_repeat=n_rounds)
+        dict_grad_iter[algo_name] = grad_iter
+        dict_loss_iter[algo_name] = loss_iter
+        dict_time_iter[algo_name] = grad_time
+        utils.save(os.path.join(folder_path, 'SP2_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'SP2_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'SP2_grad_time'), grad_time)
+
+
 
     if opt.run_spsdam:
         np.random.seed(0)
@@ -644,3 +766,4 @@ if __name__ == '__main__':
     # Some code Shuang wrote
     with open(os.path.join(folder_path, 'dict_time_iter_sum_'+'M'+ str(opt.beta)+'-reg'+ "{:.2e}".format(reg)), 'wb') as fp:
          pickle.dump(dict_time_iter_sum, fp)
+      

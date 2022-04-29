@@ -547,6 +547,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
     """
     Second order Stochastic Polyak. Introduced an epsilon (eps) in the denominators to avoid overflow
     """
+    # SL: This is SP2+
     n, d = data.shape
     x = x_0.copy()
     z = x_0.copy()
@@ -599,7 +600,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                print("SPS2 reaches the tolerance: " + str(tol))
+                print("SP2p reaches the tolerance: " + str(tol))
                 return x, norm_records, loss_records, time_records
             #    total_running_time += time.time() - total_start_time
 #    print("sps2:")
@@ -607,7 +608,7 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
     return x, norm_records, loss_records, time_records
 
 
-def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None,  verbose=1, beta=0.0):
+def SP2L2p(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None,  verbose=1, beta=0.0):
     """
     Second order Stochastic Polyak with slack. Introduced an epsilon (eps) in the denominators to avoid overflow
     """
@@ -653,8 +654,8 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
         temp2 = np.maximum(0,q_it_half - (1-lamb)*s_half)/(1-lamb + g_q_it_half@g_q_it_half)
         
         ## Iterative averaging form of momentum
-        z += -lr*temp1*gi 
-        z += -lr*temp2*g_q_it_half
+        z += -1*lr*temp1*gi
+        z += -1*lr*temp2*g_q_it_half
         x = beta*x +(1.0-beta)*z  # This adds on momentum to x                
         s = (1-lamb)*(s_half+temp2) # No momentum added to s
         # ----------------------------------------------------------
@@ -668,13 +669,275 @@ def sps2slack(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, to
                              total_running_time, epoch_running_time, verbose)
             epoch_running_time = 0.0
             if tol is not None and norm_records[-1] <= tol:
-                print("SPS2slack reaches the tolerance: " + str(tol))
+                print("SP2L2$^+$ reaches the tolerance: " + str(tol))
                 return x, norm_records, loss_records, time_records
             #    total_running_time += time.time() - total_start_time 
             #    print("sps2slack:")
             #    print(total_running_time)
     return x, norm_records, loss_records, time_records
 
+
+def SP2L1p(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None, verbose=1, beta=0.0):
+    """
+    Second order Stochastic Polyak with slack. Introduced an epsilon (eps) in the denominators to avoid overflow
+    """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+    #    z_s = s_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr * (1 + beta / (1 - beta))
+
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    #    total_start_time = time.time()
+    for idx in range(len(iis)):
+        i = iis[idx]
+        # import pdb; pdb.set_trace()
+        start_time = time.time()
+        # ith data point
+        di = data[i, :]
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x) + reg * regularizer.val(x)
+        # gradient of (i-1)-th data point
+        lprime = loss.prime(label[i], di @ x)
+        gi = lprime * di + reg * regularizer.prime(x)
+        # Hessian-grad product of (i-1)-th data point
+        hess_gi = loss.dprime(label[i], di @ x) * (lprime * di @ di + reg * regularizer.prime(x) @ di) * di
+        hess_gi += reg * regularizer.dprime(x) * gi
+
+        # --------- SP2L1 update -------
+        Gamma3 = np.maximum(0, loss_i - (s-0.5*lamb/(1-lamb)))/(1+gi@gi)
+        Gamma4 = np.minimum(Gamma3,loss_i/(gi@gi))
+        Lambda1 = loss_i - Gamma4*(gi@gi) + 0.5*Gamma4*Gamma4 * hess_gi@gi
+        temp1 = (gi - Gamma4*hess_gi)@(gi - Gamma4*hess_gi)
+        Gamma5 = np.maximum(0,Lambda1-(s-0.5*lamb/(1-lamb)))/(1+temp1)
+        Gamma6 = np.minimum(Gamma5,Lambda1/temp1)
+
+        ## Iterative averaging form of momentum
+        z += -0.1*lr * ((Gamma4+Gamma6) * gi + Gamma6*Gamma4 * hess_gi)
+        x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
+        s = np.maximum(0, ( np.maximum(0,(s-0.5*lamb/(1-lamb)) + Gamma3 ) - 0.5*lamb/(1-lamb) )+Gamma5)  # No momentum added to s
+        # ----------------------------------------------------------
+
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch,
+                                     x, norm_records, loss_records, time_records,
+                                     total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                print("SP2L1p reaches the tolerance: " + str(tol))
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+
+
+def SP2maxp(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None, verbose=1, beta=0.0):
+    """
+    Second order Stochastic Polyak with slack. Introduced an epsilon (eps) in the denominators to avoid overflow
+    """
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+    #    z_s = s_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr * (1 + beta / (1 - beta))
+
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    #    total_start_time = time.time()
+    for idx in range(len(iis)):
+        i = iis[idx]
+        # import pdb; pdb.set_trace()
+        start_time = time.time()
+        # ith data point
+        di = data[i, :]
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x) + reg * regularizer.val(x)
+        # gradient of (i-1)-th data point
+        lprime = loss.prime(label[i], di @ x)
+        gi = lprime * di + reg * regularizer.prime(x)
+        # Hessian-grad product of (i-1)-th data point
+        hess_gi = loss.dprime(label[i], di @ x) * (lprime * di @ di + reg * regularizer.prime(x) @ di) * di
+        hess_gi += reg * regularizer.dprime(x) * gi
+
+        # --------- SP2maxp update -------
+        xi1 = np.minimum(loss_i/(gi@gi), 0.5*lamb/(1-lamb))
+        xi2 = loss_i - xi1*(gi@gi) + 0.5*xi1*xi1 *(hess_gi@gi)
+        temp = (gi - xi1*hess_gi)@(gi - xi1*hess_gi)
+        xi3 = np.minimum(xi2/temp, 0.5*lamb/(1-lamb))
+
+        ## Iterative averaging form of momentum
+        z += -0.1*lr * ((xi1+xi3) * gi + xi1*xi3 * hess_gi)
+        x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
+        s = np.maximum(0, xi2 - 0.5*lamb/(1-lamb)* temp)  # No momentum added to s
+        # ----------------------------------------------------------
+
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch,
+                                     x, norm_records, loss_records, time_records,
+                                     total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                print("SP2maxp reaches the tolerance: " + str(tol))
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+
+
+def SP2max(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None, verbose=1, beta=0.0):
+    """
+    Second order Stochastic Polyak with slack. Introduced an epsilon (eps) in the denominators to avoid overflow
+    """
+    # Only works for reg = 0.0
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+    #    z_s = s_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr * (1 + beta / (1 - beta))
+
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    #    total_start_time = time.time()
+    for idx in range(len(iis)):
+        i = iis[idx]
+        # import pdb; pdb.set_trace()
+        start_time = time.time()
+        # ith data point
+        di = data[i, :]
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x) + reg * regularizer.val(x)
+        # gradient of (i-1)-th data point
+        lprime = loss.prime(label[i], di @ x)
+        gi = lprime * di + reg * regularizer.prime(x)
+        # Hessian-grad product of (i-1)-th data point
+        hess_gi = loss.dprime(label[i], di @ x) * (lprime * di @ di + reg * regularizer.prime(x) @ di) * di
+        hess_gi += reg * regularizer.dprime(x) * gi
+
+        # --------- SP2max update -------
+        ai = lprime
+        hi = loss.dprime(label[i], di @ x)
+
+        temp_x = lamb*ai/(2*(1-lamb)+lamb*hi)/(di@di)*di
+
+        ## Iterative averaging form of momentum
+        z += -20*lr * temp_x
+        x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
+        s = loss_i + 0.5*lamb*ai*ai*(di@di)*(lamb*hi*(di@di)-4*(1-lamb))/(lamb*hi*(di@di)+2*(1-lamb))/(lamb*hi*(di@di)+2*(1-lamb))  # No momentum added to s
+        # ----------------------------------------------------------
+
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch,
+                                     x, norm_records, loss_records, time_records,
+                                     total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                print("SP2max reaches the tolerance: " + str(tol))
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
+
+
+def SP2(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None, verbose=1, beta=0.0):
+    """
+    Second order Stochastic Polyak with slack. Introduced an epsilon (eps) in the denominators to avoid overflow
+    """
+    # Only works for reg = 0.0
+    n, d = data.shape
+    x = x_0.copy()
+    z = x_0.copy()
+    s = s_0.copy()
+    #    z_s = s_0.copy()
+    # init loss
+    loss_x0 = np.mean(loss.val(label, data @ x), axis=0) + reg * regularizer.val(x)
+    # init grad
+    g = np.mean(loss.prime(label, data @ x).reshape(-1, 1) * data, axis=0) + reg * regularizer.prime(x)
+    norm_records = [np.sqrt(g @ g)]
+    loss_records = [1.0]
+    # Rescale stepsize for iterate averaging momentum
+    lr = lr * (1 + beta / (1 - beta))
+
+    iis = np.random.randint(0, n, n * epoch + 1)
+    cnt = 0
+    time_records, epoch_running_time, total_running_time = [0.0], 0.0, 0.0
+    #    total_start_time = time.time()
+    for idx in range(len(iis)):
+        i = iis[idx]
+        # import pdb; pdb.set_trace()
+        start_time = time.time()
+        # ith data point
+        di = data[i, :]
+        # loss of (i-1)-th data point
+        loss_i = loss.val(label[i], di @ x) + reg * regularizer.val(x)
+        # gradient of (i-1)-th data point
+        lprime = loss.prime(label[i], di @ x)
+        gi = lprime * di + reg * regularizer.prime(x)
+        # Hessian-grad product of (i-1)-th data point
+        hess_gi = loss.dprime(label[i], di @ x) * (lprime * di @ di + reg * regularizer.prime(x) @ di) * di
+        hess_gi += reg * regularizer.dprime(x) * gi
+
+        # --------- SP2 update -------
+        ai = lprime
+        hi = loss.dprime(label[i], di @ x)
+
+        temp = ai*ai - 2*hi*loss_i
+        if temp >= 0:
+            temp_x = ai/hi*(1-np.sqrt(temp)/np.abs(ai))/(di@di)*di
+        else:
+            temp_x = ai/hi/(di@di)*di
+
+        ## Iterative averaging form of momentum
+        z += -2*lr * temp_x
+        x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
+        # ----------------------------------------------------------
+
+        epoch_running_time += time.time() - start_time
+
+        if (idx + 1) % n == 0:
+            cnt += 1
+            update_records_and_print(cnt, loss, loss_x0, regularizer, data, label, lr, reg, epoch,
+                                     x, norm_records, loss_records, time_records,
+                                     total_running_time, epoch_running_time, verbose)
+            epoch_running_time = 0.0
+            if tol is not None and norm_records[-1] <= tol:
+                print("SP2 reaches the tolerance: " + str(tol))
+                return x, norm_records, loss_records, time_records
+
+    return x, norm_records, loss_records, time_records
 
 
 
