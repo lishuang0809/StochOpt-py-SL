@@ -26,6 +26,8 @@
 #                --loss "Logistic" --regularizer 'L2'  \
 #                --run_sps True --run_sgd True --run_adam True --run_sps2 True 
 
+# To be updated!
+
 regs=(0.0)
 #regs=(0.000 0.001 0.008)
 #betas=(0.0 0.3 0.5 0.7)

@@ -27,11 +27,11 @@ def plot_iter(result_dict, problem, title, save_path, threshold=1e-8, gradplot=T
         # grad_std = np.std(result, axis=0)
         # val_min = np.add(val_avg, -grad_std)
         # val_max = np.add(val_avg, grad_std)
-        plt.semilogy(np.arange(len(val_avg)), val_avg, marker, label=algo_name, lw=3, markevery=4, markersize=12)
+        plt.semilogy(np.arange(len(val_avg)), val_avg, marker, label=algo_name, lw=3, markevery=1, markersize=12)
         plt.fill_between(np.arange(len(val_avg)), val_min, val_max, alpha=0.2)
 
     plt.tick_params(labelsize=35)
-    plt.legend(fontsize=fontsize-5,loc='lower right') 
+    plt.legend(fontsize=fontsize-5,loc='best')  #lower right
     plt.xlabel("Effective Passes", fontsize=35)
     if gradplot:
         plt.ylabel(r"$\| \nabla f \|_2$", fontsize=35)

@@ -29,8 +29,8 @@
 #regs=(0.000 0.001 0.008)
 #betas=(0.0 0.3 0.5 0.7)
 regs=(0.000 0.001 0.002 0.003 0.004 0.005 0.006 0.007 0.008 0.009)
-betas=(0.0 0.3) # 0.5 0.7
-DATASET=("colon-cancer") #mushrooms duke colon-cancer
+betas=(0.0 0.3) # 0.3 0.5 0.7
+DATASET=("mushrooms") #mushrooms duke colon-cancer
 NUM_regs=${#regs[@]} 
 NUM_betas=${#betas[@]}
 NUM_DATASETS=${#DATASET[@]}
@@ -43,14 +43,16 @@ do
         for (( s=0; s<$NUM_regs; s++ ))
         do
             NAME="${DATASET[j]}-${betas[r]}"
-            python main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
-                        --name $NAME --result_folder 'sps2_slack' --log_file "log-${NAME}.txt" \
-                        --epochs 200 --n_repetition 1 --reg ${regs[s]} --tol 1e-2 --lamb 0.5  \
+            python3 main.py --type 1 --dataset ${DATASET[j]} --data_path "./datasets/${DATASET[j]}" \
+                        --name $NAME --result_folder 'SP2_slack' --log_file "log-${NAME}.txt" \
+                        --epochs 30 --n_repetition 1 --reg ${regs[s]} --tol 1e-2 --lamb 0.1   \
                         --loss "Logistic" --regularizer 'L2'  \
-                        --run_sps2 True --run_SP2L2p True --run_SP2L1p True --run_SP2maxp True  \
-                        --run_sps True --run_sgd True --run_adam True \
+                        --run_SP2p True --run_sps True --run_sgd True --run_adam True \
+                        --run_SP2L2p True --run_SP2L1p True --run_SP2maxp True \
                         --beta ${betas[r]}
+   #                     --lamb1 0.9
   # --run_sps True --run_sgd True --run_adam True --run_sps2 True --run_sps2slack True
+           #--run_SP2p True --run_sps True --run_sgd True --run_adam True \
    #    echo "Finished regularization ${regs[s]}"
         done
         

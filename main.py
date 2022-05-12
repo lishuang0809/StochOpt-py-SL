@@ -4,7 +4,7 @@ import logging
 import time
 import numpy as np
 import load_data
-from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, sps2, SP2L2p, spsdam, spsL1, SP2L1p, SP2maxp, SP2max, SP2
+from algorithms import san, sag, svrg, snm, vsn, sana, svrg2, gd, newton, sps, taps, sgd, adam, SP2p, SP2L2p, spsdam, spsL1, SP2L1p, SP2maxp, SP2max, SP2
 import utils
 import pickle
 
@@ -34,6 +34,7 @@ def get_args():
     parser.add_argument('--scale_features', action='store', type=float, dest='scale_features', default=True)
     parser.add_argument('--reg', action='store', type=float, dest='reg', default=None)
     parser.add_argument('--lamb', action='store', type=float, dest='lamb', default=None)
+    parser.add_argument('--lamb1', action='store', type=float, dest='lamb1', default=None)
     parser.add_argument('--lamb_schedule', action='store', default=False, dest='lamb_schedule',
                         help="name of the lamb scheduling")
     # parser.add_argument('--lamb_schedule', default=False,
@@ -62,7 +63,7 @@ def get_args():
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_sps', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
-    parser.add_argument('--run_sps2', default=False,
+    parser.add_argument('--run_SP2p', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
     parser.add_argument('--run_SP2L2p', default=False,
                         type=lambda x: (str(x).lower() in ['true', '1', 'yes']))
@@ -381,7 +382,7 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
         utils.save(os.path.join(folder_path, 'sp_grad_iter'), grad_iter,
                    os.path.join(folder_path, 'sp_loss_iter'), loss_iter,
                    os.path.join(folder_path, 'sp_grad_time'), grad_time)
-    if opt.run_sps2:
+    if opt.run_SP2p:
         np.random.seed(0)
         sps2_lr =1.0
         eps=0.01
@@ -395,22 +396,26 @@ def run(opt, folder_path, criterion, penalty, reg, X, y):
                   "epoch": epochs, "x_0": x_0.copy(), "regularizer": penalty, 
                   "tol": opt.tol, "eps": eps,  "beta": beta}
         grad_iter, loss_iter, grad_time = utils.run_algorithm(
-            algo_name=algo_name, algo=sps2, algo_kwargs=kwargs, n_repeat=n_rounds)
+            algo_name=algo_name, algo=SP2p, algo_kwargs=kwargs, n_repeat=n_rounds)
         dict_grad_iter[algo_name] = grad_iter
         dict_loss_iter[algo_name] = loss_iter
         dict_time_iter[algo_name] = grad_time
-        utils.save(os.path.join(folder_path, 'sp2_grad_iter'), grad_iter,
-                   os.path.join(folder_path, 'sp2_loss_iter'), loss_iter,
-                   os.path.join(folder_path, 'sp2_grad_time'), grad_time)
+        utils.save(os.path.join(folder_path, 'SP2p_grad_iter'), grad_iter,
+                   os.path.join(folder_path, 'SP2p_loss_iter'), loss_iter,
+                   os.path.join(folder_path, 'SP2p_grad_time'), grad_time)
     
     if opt.run_SP2L2p:
         np.random.seed(0)
         sps2_lr =1.0
 
-        if opt.lamb is None:
-            lamb = 0.0
-        else:
+        # if opt.lamb is None:
+        #     lamb = 0.0
+        # else:
+        #     lamb = opt.lamb
+        if opt.lamb1 is None:
             lamb = opt.lamb
+        else:
+            lamb = opt.lamb1
         if opt.beta == 0.0:
             beta = 0.0
             algo_name = "SP2L2$^+$"

@@ -521,7 +521,7 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
         sps_step = ((lr*loss_i)/(grad_i @ grad_i +eps))
         stepsize = np.minimum(sps_step,  sps_max)
 
-        z += -0.1 * stepsize * grad_i 
+        z += -1 * stepsize * grad_i
         x = beta*x +(1-beta)*z
         # direction = -stepsize * grad_i + beta*(x-z) # Heavy ball form of  momentum 
         # z = x.copy()
@@ -543,7 +543,7 @@ def sps(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001
     return x, norm_records, loss_records, time_records
 
 
-def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, beta=0.0):
+def SP2p(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.001, verbose=1, beta=0.0):
     """
     Second order Stochastic Polyak. Introduced an epsilon (eps) in the denominators to avoid overflow
     """
@@ -584,11 +584,11 @@ def sps2(loss, regularizer, data, label, lr, reg, epoch, x_0, tol=None, eps=0.00
         hess_gi = loss.dprime(label[i], di @ x) *(lprime*di@di + reg * regularizer.prime(x)@di )*di 
         hess_gi += reg * regularizer.dprime(x)*gi
         l_div_gnorm = loss_i/ (gi@gi +eps)
-        dir_2nd =  gi -hess_gi*l_div_gnorm
+        dir_2nd = gi -hess_gi*l_div_gnorm
         dir_2nd_norm = dir_2nd@dir_2nd
         ## Iterative averaging form of momentum
-        z += -0.1*lr*l_div_gnorm*gi  #The update is applied to z variable because we use the iterative
-        z += -0.1*0.5*lr*(l_div_gnorm**2) *(hess_gi@gi/(dir_2nd_norm+eps))*dir_2nd
+        z += -1*lr*l_div_gnorm*gi  #The update is applied to z variable because we use the iterative
+        z += -1*0.5*lr*(l_div_gnorm**2) *(hess_gi@gi/(dir_2nd_norm+eps))*dir_2nd
         x = beta*x +(1.0-beta)*z  # This adds on momentum 
 
         epoch_running_time += time.time() - start_time
@@ -723,7 +723,7 @@ def SP2L1p(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=N
         Gamma6 = np.minimum(Gamma5,Lambda1/temp1)
 
         ## Iterative averaging form of momentum
-        z += -0.1*lr * ((Gamma4+Gamma6) * gi + Gamma6*Gamma4 * hess_gi)
+        z += -1*lr * ((Gamma4+Gamma6) * gi + Gamma6*Gamma4 * hess_gi)
         x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
         s = np.maximum(0, ( np.maximum(0,(s-0.5*lamb/(1-lamb)) + Gamma3 ) - 0.5*lamb/(1-lamb) )+Gamma5)  # No momentum added to s
         # ----------------------------------------------------------
@@ -787,7 +787,7 @@ def SP2maxp(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=
         xi3 = np.minimum(xi2/temp, 0.5*lamb/(1-lamb))
 
         ## Iterative averaging form of momentum
-        z += -0.1*lr * ((xi1+xi3) * gi + xi1*xi3 * hess_gi)
+        z += -1*lr * ((xi1+xi3) * gi + xi1*xi3 * hess_gi)
         x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
         s = np.maximum(0, xi2 - 0.5*lamb/(1-lamb)* temp)  # No momentum added to s
         # ----------------------------------------------------------
@@ -852,7 +852,7 @@ def SP2max(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=N
         temp_x = lamb*ai/(2*(1-lamb)+lamb*hi)/(di@di)*di
 
         ## Iterative averaging form of momentum
-        z += -20*lr * temp_x
+        z += -1*lr * temp_x
         x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
         s = loss_i + 0.5*lamb*ai*ai*(di@di)*(lamb*hi*(di@di)-4*(1-lamb))/(lamb*hi*(di@di)+2*(1-lamb))/(lamb*hi*(di@di)+2*(1-lamb))  # No momentum added to s
         # ----------------------------------------------------------
@@ -912,7 +912,7 @@ def SP2(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None
 
         # --------- SP2 update -------
         ai = lprime
-        hi = loss.dprime(label[i], di @ x)
+        hi = loss.dprime(label[i], di @ x)+0.00001
 
         temp = ai*ai - 2*hi*loss_i
         if temp >= 0:
@@ -921,7 +921,7 @@ def SP2(loss, regularizer, data, label, lr, reg, epoch, x_0, s_0, lamb, tol=None
             temp_x = ai/hi/(di@di)*di
 
         ## Iterative averaging form of momentum
-        z += -2*lr * temp_x
+        z += -1*lr * temp_x
         x = beta * x + (1.0 - beta) * z  # This adds on momentum to x
         # ----------------------------------------------------------
 

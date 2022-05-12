@@ -29,10 +29,10 @@ for r in range(NUM_betas):
     for s in range(NUM_regs):
         reg = regs[s]    
         #marker = markers[s]
-        with open(os.path.join('sps2_slack/colon-cancer', 'dict_time_iter_sum_'+'M'+ str(beta)+'-reg'+ "{:.2e}".format(reg)), 'rb') as fp:
+        with open(os.path.join('SP2_slack/mushrooms', 'dict_time_iter_sum_'+'M'+ str(beta)+'-reg'+ "{:.2e}".format(reg)), 'rb') as fp:
             grad_iter = pickle.load(fp) 
             rtime[s,:] = list(grad_iter.values()) 
-    plt.title("colon-cancer-runtime-M"+str(beta),fontsize=fs)
+    plt.title("mushrooms-runtime-M"+str(beta),fontsize=fs)
     plt.xlabel("Regularization",fontsize=fs)
     plt.ylabel("Running time",fontsize=fs)
     fig1 = plt.gcf()
@@ -41,5 +41,5 @@ for r in range(NUM_betas):
     plt.rc('ytick', labelsize=fs) 
     plt.gca().legend(('SGD','SP','SP2$^+$','SP2L2$^+$','SP2L1$^+$','SP2max$^+$','ADAM'),fontsize=fs-4,loc='upper right')
     plt.show()
-    fig1.savefig(os.path.join('sps2_slack/colon-cancer', "colon-cancer-runtime-M"+str(beta)+".pdf"), bbox_inches='tight', pad_inches=0.01)
+    fig1.savefig(os.path.join('SP2_slack/mushrooms', "mushrooms-runtime-M"+str(beta)+".pdf"), bbox_inches='tight', pad_inches=0.01)
     
