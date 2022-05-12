@@ -1,6 +1,7 @@
 import numpy as np
 from jax import grad
-import jax.numpy as jnp
+#import jax.numpy as jnp
+import pybenchfunction as bench
 
 class LogisticLoss:
     @staticmethod
@@ -59,39 +60,24 @@ class PseudoHuberLoss:
         return np.power((1. + (diff / self.delta) ** 2), -1.5)
 
 
-# class Rosenbrock:
+# def Rosenbrock(X):  # Define a function
+#   y = jnp.sum(jnp.abs(100*(X[1:] - X[:-1]**2)**2 + (1 - X[:-1])**2))
+#   return y
+# grad_Rosenbrock = grad(Rosenbrock)
+# hess_Rosenbrock = grad(grad(Rosenbrock))
 #
-#     @staticmethod
-#     def val(X):
-#         return np.sum(np.abs(100*(X[1:] - X[:-1]**2)**2 + (1 - X[:-1])**2))
-#
-#     @staticmethod
-#     def prime(y, y_hat):
-#         return y_hat - y
-#
-#     @staticmethod
-#     def dprime(y, y_hat):
-#         return np.ones_like(y_hat)
-#
-#     @classmethod
-#     # def is_dim_compatible(cls, d):
-#     #     assert (d is None) or (isinstance(d, int) and (not d < 0)), "The dimension d must be None or a positive integer"
-#     #     return  (d is None) or (d  > 0)
-#
-#     def __init__(self, d, a=1, b=100):
-#         self.d = d
-#         self.input_domain = np.array([[-5, 10] for _ in range(d)])
-#         self.a = a
-#         self.b = b
-#
-#     def get_param(self):
-#         return {'a': self.a, 'b': self.b}
-#
-#     # def get_global_minimum(self, d):
-#     #     X = np.array([1 for _ in range(d)])
-#     #     return (X, self(X))
-#
-#     def __call__(self, X):
-#         d = X.shape[0]
-#         res = np.sum(np.abs(self.b*(X[1:] - X[:-1]**2)**2 + (self.a - X[:-1])**2))
-#         return res
+# rosenbrock = bench.function.Rosenbrock(d)
+
+class Rosenbrock:
+
+    @staticmethod
+    def val(x_ip1, x_i):
+        return bench.function.Rosenbrock(x_ip1, x_i)
+
+    @staticmethod
+    def prime(x_ip1, x_i):
+        return grad(Rosenbrock)
+
+    @staticmethod
+    def dprime(x_ip1, x_i):
+        return grad(grad(Rosenbrock))
