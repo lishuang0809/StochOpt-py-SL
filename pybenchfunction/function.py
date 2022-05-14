@@ -1862,13 +1862,14 @@ class Rosenbrock:
     @classmethod
     def is_dim_compatible(cls, d):
         assert (d is None) or (isinstance(d, int) and (not d < 0)), "The dimension d must be None or a positive integer"
-        return  (d is None) or (d  > 0)
+        return (d is None) or (d > 0)
 
-    def __init__(self, d, a=1, b=100):
+    def __init__(self, d, i, a=1, b=100):    # "i" is between 1 and d
         self.d = d
         self.input_domain = np.array([[-5, 10] for _ in range(d)])
         self.a = a
         self.b = b
+        self.i = i
 
     def get_param(self):
         return {'a': self.a, 'b': self.b}
@@ -1878,10 +1879,11 @@ class Rosenbrock:
         return (X, self(X))
 
 #============= Revised by SL ===============
-    def __call__(self, X_ip1, X_i):
+    def __call__(self, X):
         #d = X.shape[0]
         #res = np.sum(np.abs(self.b*(X[1:] - X[:-1]**2)**2 + (self.a - X[:-1])**2))
-        res = self.b * (X_ip1 - X_i ** 2) ** 2 + (self.a - X_i) ** 2
+        #res = self.b * (X_ip1 - X_i ** 2) ** 2 + (self.a - X_i) ** 2
+        res = self.b * (X[self.i] - X[self.i - 1] ** 2) ** 2 + (self.a - X[self.i]) ** 2
         return res
 #============= Revised by SL ===============
 

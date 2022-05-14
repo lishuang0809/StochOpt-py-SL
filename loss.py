@@ -71,13 +71,13 @@ class PseudoHuberLoss:
 class Rosenbrock:
 
     @staticmethod
-    def val(x_ip1, x_i):
-        return bench.function.Rosenbrock(x_ip1, x_i)
+    def val(d, i):
+        return bench.function.Rosenbrock(d, i)
 
     @staticmethod
-    def prime(x_ip1, x_i):
-        return grad(Rosenbrock)
+    def prime(d, i):
+        return grad(Rosenbrock(d, i))
 
     @staticmethod
-    def dprime(x_ip1, x_i):
-        return grad(grad(Rosenbrock))
+    def dprime(d, i):
+        return grad(grad(Rosenbrock(d, i)))
